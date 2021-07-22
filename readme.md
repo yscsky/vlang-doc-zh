@@ -6,7 +6,7 @@
 
 V 是一门静态编译型语言，设计用来构建可维护的软件 。与 Go 相似，同时设计时参考了 Oberon，Rust，Swift，Kotlin，Python。
 
-V 是一门十分简单的语言，花 1 小时看完整篇文档，也就基本掌握了 V。如果熟悉 Go，那就已经掌握了 80%。
+V 是一门十分简单的语言，花点时间看完整篇文档，也就基本掌握了 V。如果熟悉 Go，那就已经掌握了 80%。
 
 V 推崇以最小的抽象来写简单干净的代码。除了简单外，V 也能给予开发者很大的能力，所有能用其它语言实现的都能用 V 实现。
 
@@ -392,6 +392,359 @@ println('[${x:10}]') // 在左侧加空格 => [   123.457]
 println('[${int(x):-10}]') // 在右侧加空格 => [123       ]
 println('[${int(x):010}]') // 用 0 填充空格 => [0000000123]
 ```
+
+## 字符串操作
+
+```v
+name := 'Bob'
+bobby := name + 'by' // + 用来串联字符串
+println(bobby) // "Bobby"
+mut s := 'hello '
+s += 'world' // `+=` 用来追加字符串
+println(s) // "hello world"
+```
+
+不能用一个整型加到字符串上：
+
+```v
+age := 10
+println('age = ' + age) // error: infix expr: cannot use int (right expression) as string
+```
+
+要么将整型转换成字符串：
+
+```v
+age := 11
+println('age = ' + age.str())
+```
+
+要么使用字符串插值：
+
+```v
+age := 12
+println('age = $age')
+```
+
+## 数值
+
+```v
+a := 123
+```
+
+将 123 赋值给 a，a 默认是 int 类型。
+
+也可以使用十六进制，二进制或八进制的标记法赋值：
+
+```v
+a := 0x7B
+b := 0b01111011
+c := 0o173
+```
+
+所有变量的值都是 123，都是 int，不管用什么标记方式。
+
+V 也支持用 _ 分割数字：
+
+```v
+num := 1_000_000 // same as 1000000
+three := 0b0_11 // same as 0b11
+float_num := 3_122.55 // same as 3122.55
+hexa := 0xF_F // same as 255
+oct := 0o17_3 // same as 0o173
+```
+
+需要设置不同类型的数字，则明确设置类型：
+
+```v
+a := i64(123)
+b := byte(42)
+c := i16(12345)
+```
+
+浮点数的设置方式类似，不指定类型默认使 f64：
+
+```v
+f := 1.0
+f1 := f64(3.14)
+f2 := f32(3.14)
+```
+
+## 数组
+
+### 基本数组概念
+
+数组是一系列相同类型的元素的集合，描述方式使用方括号包含一串元素。其中元素可以通过方括号内的索引(从0开始)访问：
+
+```v
+mut nums := [1, 2, 3]
+println(nums) // `[1, 2, 3]`
+println(nums[0]) // `1`
+println(nums[1]) // `2`
+nums[1] = 5
+println(nums) // `[1, 5, 3]`
+```
+
+### 数组属性
+
+有两个属性控制数字的“长度”：
+
+- `len`：长度 - 数组预先分配和初始化元素的数量
+- `cap`：容量 - 预分配的内存空间大小，但没有被初始化或计算使用。数组可以增长到这个大小无需重新分配。通常 V 会自动管理这个属性，但是用户可以手动设置。
+
+```v
+mut nums := [1, 2, 3]
+println(nums.len) // "3"
+println(nums.cap) // "3" 或更多
+nums = [] // 数组现在是空的
+println(nums.len) // "0"
+```
+
+注意，数组的属性是只读的，用户不能修改。
+
+### 数组初始化
+
+基本语法如上描述，数组的类型由第一个元素决定：
+
+- `[1, 2, 3]` 是一个整型数组 (`[]int`)。
+- `['a', 'b']` 是一个字符串数组 (`[]string`)。
+
+也可以明确指定第一个元素的类型：`[byte(16), 32, 64, 128]`。V 的数组都是同类型的，所有元素类型都相同，所以像 `[1, 'a']` 这样的是编译不通过的。
+
+对于非常大或者空数组有另一种初始化方式：
+
+```v
+mut a := []int{len: 10000, cap: 30000, init: 3}
+```
+
+创建了一个 10000 个元素的整型数组，并初始化了 3 个元素。内存中分配了 30000 个元素大小的空间。参数 `len`，`cap` 和 `init`都是可选的；`len` 默认是 0，`init` 默认值是类型的默认值（数值是 `0`，字符串是 `''` ）。系统运行时会确保 `cap` 不会小于 `len`（即使声明设置的较小）：
+
+```v
+arr := []int{len: 5, init: -1}
+// `arr == [-1, -1, -1, -1, -1]`, arr.cap == 5
+
+// 声明一个空数组
+users := []int{}
+```
+
+设置容量可以提高性能，避免添加元素时数组内存的再分配：
+
+```v
+mut numbers := []int{cap: 1000}
+println(numbers.len) // 0
+// 添加元素时不会重新分配内存
+for i in 0 .. 1000 {
+	numbers << i
+}
+```
+
+注意：上述代码中使用了 [range for](#range for) 的表达式和[推送操作符(`<<`)](#数组操作符)。
+
+### 数组类型
+
+一个数组可以使用以下类型：
+
+| Types        | Example Definition                   |
+| ------------ | ------------------------------------ |
+| Number       | `[]int,[]i64`                        |
+| String       | `[]string`                           |
+| Rune         | `[]rune`                             |
+| Boolean      | `[]bool`                             |
+| Array        | `[][]int`                            |
+| Struct       | `[]MyStructName`                     |
+| Channel      | `[]chan f64`                         |
+| Function     | `[]MyFunctionType` `[]fn (int) bool` |
+| Interface    | `[]MyInterfaceName`                  |
+| Sum Type     | `[]MySumTypeName`                    |
+| Generic Type | `[]T`                                |
+| Map          | `[]map[string]f64`                   |
+| Enum         | `[]MyEnumType`                       |
+| Alias        | `[]MyAliasTypeName`                  |
+| Thread       | `[]thread int`                       |
+| Reference    | `[]&f64`                             |
+| Shared       | `[]shared MyStructType`              |
+
+例程：
+
+这个例子使用[结构体](#结构体)和[联合类型](#联合类型)来创建数组。
+
+```v
+struct Point {
+	x int
+	y int
+}
+
+struct Line {
+	p1 Point
+	p2 Point
+}
+
+type ObjectSumType = Line | Point
+
+mut object_list := []ObjectSumType{}
+object_list << Point{1, 1}
+object_list << Line{
+	p1: Point{3, 3}
+	p2: Point{4, 4}
+}
+dump(object_list)
+/*
+object_list: [ObjectSumType(Point{
+    x: 1
+    y: 1
+}), ObjectSumType(Line{
+    p1: Point{
+        x: 3
+        y: 3
+    }
+    p2: Point{
+        x: 4
+        y: 4
+    }
+})]
+*/
+```
+
+### 多维数组
+
+二维数组：
+
+```v
+mut a := [][]int{len: 2, init: []int{len: 3}}
+a[0][1] = 2
+println(a) // [[0, 2, 0], [0, 0, 0]]
+```
+
+三维数组：
+
+```v
+mut a := [][][]int{len: 2, init: [][]int{len: 3, init: []int{len: 2}}}
+a[0][1][1] = 2
+println(a) // [[[0, 0], [0, 2], [0, 0]], [[0, 0], [0, 0], [0, 0]]]
+```
+
+### 数组操作符
+
+使用 `<<` 推送操作符将一个元素或一个数组加到另一个数组尾部。
+
+```v
+mut nums := [1, 2, 3]
+nums << 4
+println(nums) // "[1, 2, 3, 4]"
+// 添加数组
+nums << [5, 6, 7]
+println(nums) // "[1, 2, 3, 4, 5, 6, 7]"
+mut names := ['John']
+names << 'Peter'
+names << 'Sam'
+// names << 10  <-- 无法编译，names是字符串数组
+```
+
+使用 [in 操作符](#in 操作符) 可以判断一个元素是否在一个数组中：
+
+```v
+names := ['John', 'Peter', 'Sam']
+println(names.len) // "3"
+println('Alex' in names) // "false"
+```
+
+### 数组方法
+
+所有数组可以 `println(arr)` 打印，通过 `s := arr.str()` 转换成字符串。
+
+复制数组使用 `.clone()`：
+
+```v
+nums := [1, 2, 3]
+nums_copy := nums.clone()
+```
+
+使用 `.filter()` 和`.map()` 方法可以高效的过滤和遍历数组：
+
+```v
+nums := [1, 2, 3, 4, 5, 6]
+even := nums.filter(it % 2 == 0)
+println(even) // [2, 4, 6]
+// 通过匿名函数过滤
+even_fn := nums.filter(fn (x int) bool {
+	return x % 2 == 0
+})
+println(even_fn)
+words := ['hello', 'world']
+upper := words.map(it.to_upper())
+println(upper) // ['HELLO', 'WORLD']
+// 通过匿名函数遍历
+upper_fn := words.map(fn (w string) string {
+	return w.to_upper()
+})
+println(upper_fn) // ['HELLO', 'WORLD']
+```
+
+`it` 是内建变量来指代当前过滤或遍历过程中的元素。
+
+另外，还提供了`.any()` 和`.all()` 方法可以便利的测试当前元素是否满足一个条件：
+
+```v
+nums := [1, 2, 3]
+println(nums.any(it == 2)) // true
+println(nums.all(it >= 2)) // false
+```
+
+下面是数组内建的方法：
+
+- `b := a.repeat(n)` 将 a 数组的元素重复 n 次放入 b 数组
+- `a.insert(i, val)` 在 i 位置插入 val，并将后续元素依次往后移
+- `a.insert(i, [3, 4, 5])` 从 i 位置开始插入数组
+- `a.prepend(val)` 将 val 插入到数组头部，等价于 `a.insert(0, val)`
+- `a.prepend(arr)` 将 arr 数组插入到数组头部
+- `a.trim(new_len)` 裁剪 new_len 长度的数组，只有 new_len 小于当前数组长度时有效
+- `a.clear()`清空数组（不会改变 `cap`，等价于`a.trim(0)`）
+- `a.delete_many(start, size)` 从 start 开始删除 size 大小的连续的数组，会触发重新分配
+- `a.delete(index)` 删除 index 处的元素，等价于 `a.delete_many(index, 1)`
+- `v := a.first()` 等价于 `v := a[0]`
+- `v := a.last()` 等价于 `v := a[a.len - 1]`
+- `v := a.pop()` 获取最后一个元素，并从数组中移除
+- `a.delete_last()` 移除最后一个元素
+- `b := a.reverse()` 生成 a 的反序数组
+- `a.reverse_in_place()` 在 a 中将元素的顺序调转
+- `a.join(joiner)` 使用`joiner`字符串作为分隔符将字符串数组连接成一个字符串
+
+### 排序数组
+
+
+
+### 数组切片
+
+
+
+## 固定大小的数组 
+
+
+
+## Maps
+
+
+
+# 模块导入
+
+
+
+
+
+# 条件语句
+
+
+
+
+
+# 结构体
+
+
+
+# 共用体 Unions
+
+
+
+# 函数2
 
 ## 默认为纯函数
 
