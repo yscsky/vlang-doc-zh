@@ -195,6 +195,81 @@ println(large_number)
 
 为保证代码风格的一致性，所有的变量和函数名都使用 `snake_case` 的样式，而类型名则使用 `PascalCase` 的样式。
 
+**可变变量**
+
+```v
+mut age := 20
+println(age)
+age = 21
+println(age)
+```
+
+改变变量的值使用 `=`，在 V 中，变量默认是不可变的。如果要可改变，则在变量声明时加 `mut`。
+
+可以将上面代码中第一行的 mut 去除编译试试。
+
+**初始化 vs 赋值**
+
+注意区分 `:=` 和  `=`， `:=` 是用来声明和初始化变量， `=` 是用来赋值。
+
+```v
+fn main() {
+	age = 21
+}
+```
+
+这个代码是编译不通过的，age 没有声明，所有变量在 V 中都要被声明。
+
+```v
+fn main() {
+	age := 21
+}
+```
+
+多个变量值可以在一行代码中改变。这样，交换变量值可以不用中间变量来实现。
+
+```v
+mut a := 0
+mut b := 1
+println('$a, $b') // 0, 1
+a, b = b, a
+println('$a, $b') // 1, 0
+```
+
+**变量声明的错误**
+
+在开发模式中，未使用的变量编译器会发出警告，"unused variable"。在生产模式中，则完全不会被编译。生产模式使用：`v -prod foo.v`，编译时设置 `-prod`。
+
+```v
+fn main() {
+	a := 10
+	if true {
+		a := 20 // error: redefinition of `a`
+	}
+	// warning: unused variable `a`
+}
+```
+
+不同与其它语言，变量遮蔽是不允许的。在外部代码块中已经声明了一个变量，在其内部代码块中，不能再声明同名的变量，编译会报错。
+
+但是允许遮蔽模块名，因为在某些情况下非常有用：
+
+```v
+import ui
+import gg
+
+fn draw(ctx &gg.Context) {
+	gg := ctx.parent.get_ui().gg
+	gg.draw_rect(10, 10, 100, 50)
+}
+```
+
+# V 类型
+
+
+
+
+
 ## 默认为纯函数
 
 # 模块
