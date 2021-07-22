@@ -116,3 +116,80 @@ v .
 
 注意：任何编译参数要放在run之前，任何程序执行参数，放在源码之后，参数会原样传递给程序，v命令不会处理。
 
+# 注释
+
+```v
+// 这是单行注释
+/*
+这是多行注释
+   /* 可以内嵌 */
+*/
+```
+
+# 函数
+
+```v
+fn main() {
+	println(add(77, 33))
+	println(sub(100, 50))
+}
+
+fn add(x int, y int) int {
+	return x + y
+}
+
+fn sub(x int, y int) int {
+	return x - y
+}
+```
+
+变量类型在变量名之后。
+
+与Go和C一样，函数不能重载，这样简化能提高代码的可维护性和可读性。
+
+函数可以在声明前就使用，例如add和sub代码在main之后，但是main中可以调用。这适用于V中的所有声明，并且不需要头文件或考虑文件和声明的顺序。 
+
+## 多返回值
+
+```v
+fn foo() (int, int) {
+	return 2, 3
+}
+
+a, b := foo()
+println(a) // 2
+println(b) // 3
+c, _ := foo() // 忽略返回值使用 `_`
+```
+
+# 符号可见性
+
+```v
+pub fn public_function() {
+}
+
+fn private_function() {
+}
+```
+
+函数默认是私有的不对外暴露，要使得其它模块可以使用，需要前置`pub`，对于常量和类型都一样。	
+
+注意：`pub`只能用于被命名的模块，如何创建模块参见[模块](#模块)。
+
+# 变量
+
+```v
+name := 'Bob'
+age := 20
+large_number := i64(9999999999)
+println(name)
+println(age)
+println(large_number)
+```
+
+使用`:=`声明和初始化变量，这也是V中唯一的声明方式，这也说明变量都有初始值。
+
+
+
+# 模块
+
