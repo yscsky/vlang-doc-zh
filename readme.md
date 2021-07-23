@@ -980,9 +980,192 @@ fn main() {
 }
 ```
 
-# 条件语句
+# 条件语句和表达式
 
-# 结构体
+## If
+
+```v
+a := 10
+b := 20
+if a < b {
+	println('$a < $b')
+} else if a > b {
+	println('$a > $b')
+} else {
+	println('$a == $b')
+}
+```
+
+if 语句和其它语言类似，但是不同于类 C 语言，条件部分不需要小括号，而大括号是必须要有的。
+
+if 语句可以用在表达式中：
+
+```v
+num := 777
+s := if num % 2 == 0 { 'even' } else { 'odd' }
+println(s)
+// "odd"
+```
+
+### 类型检查
+
+使用 `is` 可以检查当前类型，反之用 `!is`。可以使用在 if 语句中：
+
+```v
+struct Abc {
+	val string
+}
+
+struct Xyz {
+	foo string
+}
+
+type Alphabet = Abc | Xyz
+
+x := Alphabet(Abc{'test'}) // sum type
+if x is Abc {
+	// x 自动被识别成 Abc，进行使用
+	println(x)
+}
+if x !is Abc {
+	println('Not Abc')
+}
+```
+
+也可以使用在 match 语句中：
+
+```v
+match x {
+	Abc {
+		// x 自动被识别成 Abc，进行使用
+		println(x)
+	}
+	Xyz {
+		// x 自动被识别成 Xyz，进行使用
+		println(x)
+	}
+}
+```
+
+对结构体中字段也同样适用：
+
+```v
+struct MyStruct {
+	x int
+}
+
+struct MyStruct2 {
+	y string
+}
+
+type MySumType = MyStruct | MyStruct2
+
+struct Abc {
+	bar MySumType
+}
+
+x := Abc{
+	bar: MyStruct{123} // MyStruct 会自动转换成 MySumType
+}
+if x.bar is MyStruct {
+	// x.bar 自动被识别
+	println(x.bar)
+}
+match x.bar {
+	MyStruct {
+		// x.bar 自动被识别
+		println(x.bar)
+	}
+	else {}
+}
+```
+
+对于可变变量这种检查是不安全的，然而，有时也是必要的。所以，需要在表达式中加入 `mnt` 关键字，来告诉编译器。像下面代码：
+
+```v
+mut x := MySumType(MyStruct{123})
+if mut x is MyStruct {
+	// x 即使是变量也会被识别为 MyStruct，没有 mut 就不会有效
+	println(x)
+}
+// same with match
+match mut x {
+	MyStruct {
+		// x 即使是变量也会被识别为 MyStruct，没有 mut 就不会有效
+		println(x)
+	}
+}
+```
+
+
+
+
+
+## In 操作符
+
+
+
+## For循环
+
+
+
+### for / in
+
+
+
+#### 数组 for
+
+
+
+#### 自定义遍历器
+
+
+
+#### Map for
+
+
+
+#### Range for
+
+
+
+### 条件 for 循环
+
+
+
+### 无条件 for 循环
+
+
+
+### C for
+
+
+
+### 带标签的 break 和 continue
+
+
+
+## Match
+
+
+
+
+
+## Defer
+
+
+
+
+
+
+
+
+
+
+
+
+
+# 结构体 Struct
 
 # 共用体 Unions
 
