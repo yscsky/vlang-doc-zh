@@ -1097,37 +1097,168 @@ match mut x {
 }
 ```
 
-
-
-
-
 ## In 操作符
 
+`in` 可以用来检查一个元素是否再数组或 map 中，反之用 `!in`。
 
+```v
+nums := [1, 2, 3]
+println(1 in nums) // true
+println(4 !in nums) // true
+m := map{
+	'one': 1
+	'two': 2
+}
+println('one' in m) // true
+println('three' !in m) // true
+```
+
+也可以使用在布尔表达式中使代码更简洁干净：
+
+```v
+enum Token {
+	plus
+	minus
+	div
+	mult
+}
+
+struct Parser {
+	token Token
+}
+
+parser := Parser{}
+if parser.token == .plus || parser.token == .minus || parser.token == .div || parser.token == .mult {
+	// ...
+}
+if parser.token in [.plus, .minus, .div, .mult] {
+	// ...
+}
+```
+
+V 会优化上面的表达式，这两种方式都会生成相同的机器代码，不会有数组被创建。
 
 ## For循环
 
-
+V 只用一个循环关键字 for，有不同的用法。
 
 ### for / in
 
-
+最常见的形式，可用在数组，map 和数值范围中。
 
 #### 数组 for
 
+```v
+numbers := [1, 2, 3, 4, 5]
+for num in numbers {
+	println(num)
+}
+names := ['Sam', 'Peter']
+for i, name in names {
+	println('$i) $name')
+	// Output: 0) Sam
+	//         1) Peter
+}
+```
 
+`for value in arr` 的形式可以遍历数组中每个元素，如果需要索引值，可以使用 `for index, value in arr`。
+
+注意，这里的值是只读的，如果需要在循环过程中修改，需要声明可变变量：
+
+```v
+mut numbers := [0, 1, 2]
+for mut num in numbers {
+	num++
+}
+println(numbers) // [1, 2, 3]
+```
+
+当标识符是 `_` 下划线，则表示这个变量是忽略的。
 
 #### 自定义遍历器
 
+实现 `next` 函数的类型可以用在 for 循环中。
 
+```v
+struct SquareIterator {
+	arr []int
+mut:
+	idx int
+}
+
+fn (mut iter SquareIterator) next() ?int {
+	if iter.idx >= iter.arr.len {
+		return error('')
+	}
+	defer {
+		iter.idx++
+	}
+	return iter.arr[iter.idx] * iter.arr[iter.idx]
+}
+
+nums := [1, 2, 3, 4, 5]
+iter := SquareIterator{
+	arr: nums
+}
+for squared in iter {
+	println(squared)
+}
+
+/*
+打印：
+1
+4
+9
+16
+25
+*/
+```
 
 #### Map for
 
+```v
+m := map{
+	'one': 1
+	'two': 2
+}
+for key, value in m {
+	println('$key -> $value')
+	// Output: one -> 1
+	//         two -> 2
+}
+```
 
+键或值需要忽略的话，使用标识符 `_` 下划线即可。
+
+```v
+m := map{
+	'one': 1
+	'two': 2
+}
+// 只遍历 keys
+for key, _ in m {
+	println(key)
+	// Output: one
+	//         two
+}
+// 只遍历 values
+for _, value in m {
+	println(value)
+	// Output: 1
+	//         2
+}
+```
 
 #### Range for
 
+```v
+// Prints '01234'
+for i in 0 .. 5 {
+	print(i)
+}
+```
 
+`low .. high` 表示从 low 开始包含 low 到 high 结束但不包含 high的区间 [lwo, high)。
 
 ### 条件 for 循环
 
