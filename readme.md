@@ -443,7 +443,7 @@ c := 0o173
 
 所有变量的值都是 123，都是 int，不管用什么标记方式。
 
-V 也支持用 _ 分割数字：
+V 也支持用 \_ 分割数字：
 
 ```v
 num := 1_000_000 // same as 1000000
@@ -473,7 +473,7 @@ f2 := f32(3.14)
 
 ### 基本数组概念
 
-数组是一系列相同类型的元素的集合，描述方式使用方括号包含一串元素。其中元素可以通过方括号内的索引(从0开始)访问：
+数组是一系列相同类型的元素的集合，描述方式使用方括号包含一串元素。其中元素可以通过方括号内的索引(从 0 开始)访问：
 
 ```v
 mut nums := [1, 2, 3]
@@ -537,7 +537,7 @@ for i in 0 .. 1000 {
 }
 ```
 
-注意：上述代码中使用了 [range for](#range for) 的表达式和[推送操作符(`<<`)](#数组操作符)。
+注意：上述代码中使用了 [range for](#range for) 的表达式和[ << 操作符](#数组操作符)。
 
 ### 数组类型
 
@@ -710,41 +710,121 @@ println(nums.all(it >= 2)) // false
 
 ### 排序数组
 
+排序数组的方式十分简单和直观，特别定义了 `a` 和 `b` 来支持自定义排序条件。
 
+```v
+mut numbers := [1, 3, 2]
+numbers.sort() // 1, 2, 3
+numbers.sort(a > b) // 3, 2, 1
+```
+
+```v
+struct User {
+	age  int
+	name string
+}
+
+mut users := [User{21, 'Bob'}, User{20, 'Zarkon'}, User{25, 'Alice'}]
+users.sort(a.age < b.age) // 根据 User.age 来排序
+users.sort(a.name > b.name) // 根据 User.name 来反向排序
+```
+
+V 支持自定义排序，通过 `sort_with_compare` 方法实现，适用于需要通过多个字段来排序的情况。下面的代码就通过 name 来正向排序，age 来反向排序：
+
+```v
+struct User {
+	age  int
+	name string
+}
+
+mut users := [User{21, 'Bob'}, User{65, 'Bob'}, User{25, 'Alice'}]
+
+custom_sort_fn := fn (a &User, b &User) int {
+	// return -1 当 a 在 b 之前
+	// return 0, 保持顺序
+	// return 1 当 b 在 a 之前
+	if a.name == b.name {
+		if a.age < b.age {
+			return 1
+		}
+		if a.age > b.age {
+			return -1
+		}
+		return 0
+	}
+	if a.name < b.name {
+		return -1
+	} else if a.name > b.name {
+		return 1
+	}
+	return 0
+}
+users.sort_with_compare(custom_sort_fn)
+```
 
 ### 数组切片
 
+切片是一个数组的部分，初始化的方式是在索引值之间通过 `..` 操作符生成，右侧的索引值必须大于或等于左侧值。
 
+如果右侧值省略，则默认是数组长度；左侧值省略默认是 0。
 
-## 固定大小的数组 
+```v
+nums := [0, 10, 20, 30, 40]
+println(nums[1..4]) // [10, 20, 30]
+println(nums[..4]) // [0, 10, 20, 30]
+println(nums[1..]) // [10, 20, 30, 40]
+```
 
+在 V 中，切片就是数组本身，并不是两个截然不同的类型。因此，数组的操作在切片上都能执行。切片也能追加到相同类型元素的数组上：
 
+```v
+array_1 := [3, 5, 4, 7, 6]
+mut array_2 := [0, 1]
+array_2 << array_1[..3]
+println(array_2) // `[0, 1, 3, 5, 4]`
+```
+
+切片总是以最小的容量 (`cap == len`) 来创建，无论源数组的容量和长度是多少。当向切片中增加元素导致切片容量变化，会立刻重新分配内存，此时切片将独立于源数组，不会改变源数组：
+
+```v
+mut a := [0, 1, 2, 3, 4, 5]
+mut b := a[2..4]
+b[0] = 7 // `b[0]` 是引用自 `a[2]`
+println(a) // `[0, 1, 7, 3, 4, 5]`
+b << 9
+// `b` 会重新分配内存，此时就独立于 `a`
+println(a) // `[0, 1, 7, 3, 4, 5]` - 不会改变
+println(b) // `[7, 3, 9]`
+```
+
+向源数组中添加元素，如果超出容量的话，内存会重新分配，导致源数组会独立于子切片：
+
+```v
+mut a := []int{len: 5, cap: 6, init: 2}
+mut b := a[1..4]
+a << 3
+// 没有超出 `cap` 不会重分配
+b[2] = 13 // `a[3]` 是被修改的
+a << 4
+// a 会被重分配此时独立于 `b` (`cap` 扩展了)
+b[1] = 3 // `a` 中不会变化
+println(a) // `[2, 2, 2, 13, 2, 3, 4]`
+println(b) // `[2, 3, 13]`
+```
+
+## 固定大小的数组
 
 ## Maps
 
-
-
 # 模块导入
-
-
-
-
 
 # 条件语句
 
-
-
-
-
 # 结构体
-
-
 
 # 共用体 Unions
 
-
-
-# 函数2
+# 函数 2
 
 ## 默认为纯函数
 
