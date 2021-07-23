@@ -1262,39 +1262,189 @@ for i in 0 .. 5 {
 
 ### 条件 for 循环
 
+```v
+mut sum := 0
+mut i := 0
+for i <= 100 {
+	sum += i
+	i++
+}
+println(sum) // "5050"
+```
 
+类似于其它语言的 while，知道条件不满足时才停止、
 
 ### 无条件 for 循环
 
+```v
+mut num := 0
+for {
+	num += 2
+	if num >= 10 {
+		break
+	}
+}
+println(num) // "10"
+```
 
+没有满足条件的无限循环。
 
 ### C for
 
+```v
+for i := 0; i < 10; i += 2 {
+	// 不打印 6
+	if i == 6 {
+		continue
+	}
+	println(i)
+}
+```
 
+最终是大家喜闻乐见的 C 风格 for 循环。这里的 i 不需要用 mut 修饰，因为默认会定义成可变值。
 
 ### 带标签的 break 和 continue
 
+`break` 和`continue` 默认在 for 循环内部进行控制。可以带上标签跳转到外层循环中。
 
+```v
+outer: for i := 4; true; i++ {
+	println(i)
+	for {
+		if i < 7 {
+			continue outer
+		} else {
+			break outer
+		}
+	}
+}
+```
+
+标签必须紧跟在外部循环前，输出结果：
+
+```v
+4
+5
+6
+7
+```
 
 ## Match
 
+```v
+os := 'windows'
+print('V is running on ')
+match os {
+	'darwin' { println('macOS.') }
+	'linux' { println('Linux.') }
+	else { println(os) }
+}
+```
 
+match 语法是一个简单形式的 `if - else`。当一个分支满足时，会执行这个分支中的代码，没有分支满足时，会执行 else 中的代码。
 
+```v
+number := 2
+s := match number {
+	1 { 'one' }
+	2 { 'two' }
+	else { 'many' }
+}
+```
 
+match 也可以用做表达式，返回最终符合的分支结果。
+
+```v
+enum Color {
+	red
+	blue
+	green
+}
+
+fn is_red_or_blue(c Color) bool {
+	return match c {
+		.red, .blue { true } // 可用来匹配多值
+		.green { false }
+	}
+}
+```
+
+match 对象是 enum 枚举时可以使用 `.variant_here`  短句语法，当每个枚举值列举时 else 是不能存在的。
+
+```v
+c := `v`
+typ := match c {
+	`0`...`9` { 'digit' }
+	`A`...`Z` { 'uppercase' }
+	`a`...`z` { 'lowercase' }
+	else { 'other' }
+}
+println(typ) // 'lowercase'
+```
+
+可以使用范围匹配，在这个范围内则执行后面代码。
+
+注意这里的范围是用 `...` 而不是 `..`，因为这个范围是包含最后一个值的，使用三点包含最后一个值，两点不包含最后一个值，在 match 使用两点会抛出错误。
 
 ## Defer
 
+defer 包含的代码块只有在外层代码块执行结束返回时才执行。
 
+```v
+import os
 
+fn read_log() {
+	mut ok := false
+	mut f := os.open('log.txt') or { panic(err.msg) }
+	defer {
+		f.close()
+	}
+	// ...
+	if !ok {
+		// defer 代码块会被调用，文件会被关闭
+		return
+	}
+	// ...
+	// defer 代码块会被调用，文件会被关闭
+}
+```
 
+如果函数有返回值，defer 代码块会在返回表达式运行结束后再执行。
 
+```v
+import os
 
+enum State {
+	normal
+	write_log
+	return_error
+}
 
+// 写日志文件并返回写字节数量
+fn write_log(s State) ?int {
+	mut f := os.create('log.txt') ?
+	defer {
+		f.close()
+	}
+	if s == .write_log {
+		// 在 `f.writeln()` 执行后，`f.close()` 才会被调用，写字节数会返回给 `main()`
+		return f.writeln('This is a log file')
+	} else if s == .return_error {
+		//  在 `error()` 返回之后，文件会被关闭，但返回的错误信息中是打开的
+		return error('nothing written; file open: $f.is_opened')
+	}
+	// 文件在这也会被关闭
+	return 0
+}
 
-
-
-
-
+fn main() {
+	n := write_log(.return_error) or {
+		println('Error: $err')
+		0
+	}
+	println('$n bytes written')
+}
+```
 
 # 结构体 Struct
 
