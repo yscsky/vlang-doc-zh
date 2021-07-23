@@ -839,6 +839,66 @@ println(typeof(anums).name) // => []int
 
 ## Maps
 
+```v
+mut m := map[string]int{} // 键是 `string` 值是 `int` 的 map
+m['one'] = 1
+m['two'] = 2
+println(m['one']) // "1"
+println(m['bad_key']) // "0"
+println('bad_key' in m) // `in` 可以检测是否有这个键存在
+m.delete('two')
+```
+
+Maps 的键类型可以是 string, rune, integer, float 或 voidptr。
+
+可以使用短声明的语法声明 map：
+
+```v
+numbers := map{
+	'one': 1
+	'two': 2
+}
+println(numbers)
+```
+
+如果找不到键，会返回零值：
+
+```v
+sm := map{
+	'abc': 'xyz'
+}
+val := sm['bad_key']
+println(val) // ''
+
+intm := map{
+	1: 1234
+	2: 5678
+}
+s := intm[3]
+println(s) // 0
+```
+
+也可以使用 `or {}` 语法处理未找到键的情况：
+
+```v
+mm := map[string]int{}
+val := mm['bad_key'] or { panic('key not found') }
+```
+
+同样也能在数组中使用 `or {}`：
+
+```v
+arr := [1, 2, 3]
+large_index := 999
+val := arr[large_index] or { panic('out of bounds') }
+```
+
+
+
+
+
+
+
 # 模块导入
 
 # 条件语句
