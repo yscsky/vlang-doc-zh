@@ -893,13 +893,92 @@ large_index := 999
 val := arr[large_index] or { panic('out of bounds') }
 ```
 
-
-
-
-
-
-
 # 模块导入
+
+关于创建模块的信息参见[模块](#模块)。
+
+使用 `import` 关键字可以导入模块：
+
+```v
+import os
+
+fn main() {
+	// 从命令行中读取
+	name := os.input('Enter your name: ')
+	println('Hello, $name!')
+}
+```
+
+上述代码引入了 os 模块就可以使用其公开的声明定义，就例如 input 函数。其它公共模块的公开声明参见 [标准库](https://modules.vlang.io/index.html)。
+
+默认情况下，没事调用外部函数必须明确模块名，起初可能会显得很冗余，但是这样让代码更容易阅读和理解，能清楚的知道这个函数是从哪个模块中被调用的。对于大型程序而言是十分有用的。
+
+和 Go 一样，不允许模块循环调用。
+
+## 选择性导入
+
+可以选择性导入特定的函数，直接在代码中使用：
+
+```v
+import os { input }
+
+fn main() {
+	// 从命令行中读取
+	name := input('Enter your name: ')
+	println('Hello, $name!')
+}
+```
+
+注意：这还是会导入模块，而且对于常量而言是不可以这样使用。
+
+可以一次同时导入多个函数：
+
+```v
+import os { input, user_os }
+
+name := input('Enter your name: ')
+println('Name: $name')
+os := user_os()
+println('Your OS is ${os}.')
+```
+
+## 模块导入别名
+
+任何导入的模块可以使用 `as` 关键字声明别名，注意下面代码无法编译通过，除非创建 `mymod/sha256.v`：
+
+```v
+import crypto.sha256
+import mymod.sha256 as mysha256
+
+fn main() {
+	v_hash := sha256.sum('hi'.bytes()).hex()
+	my_hash := mysha256.sum('hi'.bytes()).hex()
+	assert my_hash == v_hash
+}
+```
+
+不能对导入的函数和类型建别名，但是可以重新声明一个类型。
+
+```v
+import time
+import math
+
+type MyTime = time.Time
+
+fn (mut t MyTime) century() int {
+	return int(1.0 + math.trunc(f64(t.year) * 0.009999794661191))
+}
+
+fn main() {
+	mut my_time := MyTime{
+		year: 2020
+		month: 12
+		day: 25
+	}
+	println(time.new_time(my_time).utc_string())
+	println('Century: $my_time.century()')
+}
+```
 
 # 条件语句
 
