@@ -2768,13 +2768,323 @@ println(compare(1.1, 1.2)) //         -1
 
 # 并发
 
-## 生成并发任务
+## 开启并发任务
+
+V 并发模式十分类似于 Go，运行 `foo()` 在并发的线程上，使用 `go foo()`：
+
+```v
+import math
+
+fn p(a f64, b f64) { // 没有返回值的普通函数
+	c := math.sqrt(a * a + b * b)
+	println(c)
+}
+
+fn main() {
+	go p(3, 4)
+	// p 会在并发线程上运行
+}
+```
+
+有时候有必要在主线程中等待并发线程结束，需要开启线程时赋值一个 handle，调用 `wait()` 方法等待：
+
+```v
+import math
+
+fn p(a f64, b f64) { // 没有返回值的普通函数
+	c := math.sqrt(a * a + b * b)
+	println(c) // prints `5`
+}
+
+fn main() {
+	h := go p(3, 4)
+	// p 会在并发线程上运行
+	h.wait()
+	// 等待 p 结束
+}
+```
+
+对于有返回值的函数，无需修改也能并发运行得到结果：
+
+```v
+import math { sqrt }
+
+fn get_hypot(a f64, b f64) f64 { // 有返回值的普通函数
+	c := sqrt(a * a + b * b)
+	return c
+}
+
+fn main() {
+	g := go get_hypot(54.06, 2.08) // 开启线程处理
+	h1 := get_hypot(2.32, 16.74) // 做其它计算
+	h2 := g.wait() // 等待运行结束得到返回值
+	println('Results: $h1, $h2') // 打印 `Results: 16.9, 54.1`
+}
+```
+
+如果有大量任务的话，可以使用线程数组管理。
+
+```v
+import time
+
+fn task(id int, duration int) {
+	println('task $id begin')
+	time.sleep(duration * time.millisecond)
+	println('task $id end')
+}
+
+fn main() {
+	mut threads := []thread{}
+	threads << go task(1, 500)
+	threads << go task(2, 900)
+	threads << go task(3, 100)
+	threads.wait()
+	println('done')
+}
+
+// Output:
+// task 1 begin
+// task 2 begin
+// task 3 begin
+// task 3 end
+// task 1 end
+// task 2 end
+// done
+```
+
+另外如果线程返回类型相同的话，调用 wait 函数可以得到完整的结果。
+
+```v
+fn expensive_computing(i int) int {
+	return i * i
+}
+
+fn main() {
+	mut threads := []thread int{}
+	for i in 1 .. 10 {
+		threads << go expensive_computing(i)
+	}
+	// Join all tasks
+	r := threads.wait()
+	println('All jobs finished: $r')
+}
+
+// Output: All jobs finished: [1, 4, 9, 16, 25, 36, 49, 64, 81]
+```
 
 ## 管道
 
+管道是沟通两个协程的推荐方式。V 的管理和 Go 的基本一致。队列的形式，带缓冲和不带缓冲，通过 select 在多个管道中选择。
+
+### 语法和用法
+
+管道声明使用 chan 关键字，缓冲大小使用 cap 属性：
+
+```v
+ch := chan int{} // 没有缓冲，同步的
+ch2 := chan f64{cap: 100} // 缓冲大小 100
+```
+
+管道不用声明 mut。缓冲区长度不是类型的一部分，而是单个管道的属性。管道可以像变量一样传递给协程：
+
+```v
+fn f(ch chan int) {
+	// ...
+}
+
+fn main() {
+	ch := chan int{}
+	go f(ch)
+	// ...
+}
+```
+
+使用箭头操作符可以向管道中送入数据，也可以从管道中读取数据：
+
+```v
+// 设置缓冲则送入数据不会阻塞
+ch := chan int{cap: 1}
+ch2 := chan f64{cap: 1}
+n := 5
+// 从入
+ch <- n
+ch2 <- 7.3
+mut y := f64(0.0)
+m := <-ch // 读取到一个新变量中
+y = <-ch2 // 读取到一个存在的变量中
+```
+
+管道关闭后则不能送入数据，如果送入会产生运行时错误。读取缓冲为空的关闭管道会立刻返回错误，这时可以使用 or 处理。
+
+```v
+ch := chan int{}
+ch2 := chan f64{}
+// ...
+ch.close()
+// ...
+m := <-ch or {
+    println('channel has been closed')
+}
+
+// 传递错误
+y := <-ch2 ?
+```
+
+### 管道选择
+
+select 语句可以同时监控多个管道，而不会明显增加 CPU 负载。类似于 match 语句包含多个分支：
+
+```v
+import time
+
+fn main() {
+	ch := chan f64{}
+	ch2 := chan f64{}
+	ch3 := chan f64{}
+	mut b := 0.0
+	c := 1.0
+	// 向 ch ch2 中输入数据
+	go fn (the_channel chan f64) {
+		time.sleep(5 * time.millisecond)
+		the_channel <- 1.0
+	}(ch)
+	go fn (the_channel chan f64) {
+		time.sleep(1 * time.millisecond)
+		the_channel <- 1.0
+	}(ch2)
+	go fn (the_channel chan f64) {
+		_ := <-the_channel
+	}(ch3)
+
+	select {
+		a := <-ch {
+			eprintln('> a: $a')
+		}
+		b = <-ch2 {
+			eprintln('> b: $b')
+		}
+		ch3 <- c {
+			time.sleep(5 * time.millisecond)
+			eprintln('> c: $c was send on channel ch3')
+		}
+		> 500 * time.millisecond {
+			// 0.5s 超时，没有管道处理
+			eprintln('> more than 0.5s passed without a channel being ready')
+		}
+	}
+	eprintln('> done')
+}
+```
+
+超时分支是可选的，如果没有，select 可能会一直等待下去。可以使用 else 分支，但是这个会立即执行如果没有管道可用的话。`else` 和 `> timeout` 是互斥的。
+
+select 还可以用作返回布尔类型的表达式，如果所有管道关闭的话返回 false ：
+
+```v
+if select {
+    ch <- a {
+        // ...
+    }
+} {
+    // 管道开通的
+} else {
+    // 管道关闭的
+}
+```
+
+### 管道特殊功能
+
+管道内建了属性和方法：
+
+```v
+struct Abc {
+	x int
+}
+
+a := 2.13
+ch := chan f64{}
+res := ch.try_push(a) // 试着执行 `ch <- a`
+println(res)
+l := ch.len // 在队列中的数据数量
+c := ch.cap // 队列最大长度
+is_closed := ch.closed // 管道是否关闭
+println(l)
+println(c)
+mut b := Abc{}
+ch2 := chan Abc{}
+res2 := ch2.try_pop(mut b) // 试着执行 `b = <-ch2`
+```
+
+`try_push/pop()` 方法会立即返回以下某个结果：`.success`, `.not_ready` 或 `.closed`。但是这些属性和方法在生产环境中不建议使用，因为属性和方法的算法往往会产生数据竞态。尤其是 `.len` 和 `.closed` 不能用于关键判断，推荐使用 or 分支、错误传递或 select 语句。
+
 ## 共享对象
 
-# 解码 JSON
+协程的数据交换可以通过共享变量的方式。通过 shared 关键字声明变量，此时 struct 中隐含了一个锁，使用 rlock 进行只读锁，lock 进行读写锁。
+
+```v
+struct St {
+mut:
+	x int // 共享的数据
+}
+
+fn (shared b St) g() {
+	lock b {
+		// 读写 b.x
+	}
+}
+
+fn main() {
+	shared a := St{
+		x: 10
+	}
+	go a.g()
+	// ...
+	rlock a {
+		// 读 a.x
+	}
+}
+```
+
+共享变量必须是 structs, arrays 或 maps。
+
+# 解析 JSON
+
+```v
+import json
+
+struct Foo {
+	x int
+}
+
+struct User {
+	name string
+	age  int
+	// `skip` 属性跳过 JSON 解析
+	foo Foo [skip]
+	// 如果字段名不同于 JSON，需要特别声明
+	last_name string [json: lastName]
+}
+
+data := '{ "name": "Frodo", "lastName": "Baggins", "age": 25 }'
+user := json.decode(User, data) or {
+	eprintln('Failed to decode json')
+	return
+}
+println(user.name)
+println(user.last_name)
+println(user.age)
+// 可以解析 JSON 数组
+sfoos := '[{"x":123},{"x":456}]'
+foos := json.decode([]Foo, sfoos) ?
+println(foos[0].x)
+println(foos[1].x)
+```
+
+因为 JSON 无处不在，V 直接支持。
+
+`json.decode` 函数需要两个参数：一是 JSON 解析的类型，二是包含 JSON 数据的字符串。
+
+V 会生成 JSON 编码和解析的代码，不是通过反射实现，因此性能更好。
 
 # 测试
 
