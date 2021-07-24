@@ -2586,7 +2586,120 @@ fn pass_time(w World) {
 
 这是联合类型的一种特殊形式。
 
-## 可选/结果类型和错误处理
+## 选项/结果类型和错误处理
+
+选项类型使用 `?Type` 来声明：
+
+```v
+struct User {
+	id   int
+	name string
+}
+
+struct Repo {
+	users []User
+}
+
+fn (r Repo) find_user_by_id(id int) ?User {
+	for user in r.users {
+		if user.id == id {
+			// V 自动包装成选择类型
+			return user
+		}
+	}
+	return error('User $id not found')
+}
+
+fn main() {
+	repo := Repo{
+		users: [User{1, 'Andrew'}, User{2, 'Bob'}, User{10, 'Charles'}]
+	}
+	user := repo.find_user_by_id(10) or { // 选项类型必须使用 `or` 块处理
+		return
+	}
+	println(user.id) // "10"
+	println(user.name) // "Charles"
+}
+```
+
+V 结合了选项和结果到同一个类型中，无需决定使用哪一个。
+
+将一个函数升级为选项函数，只需在返回结果前中加 `?`，如果发生错误就返回错误类型。
+
+如果不需要返回错误，则直接 `return none`，这比 `return error("")` 要高效。
+
+这是 V 的主要错误处理机制，其仍是返回值，但是优势在于错误不能不被处理，而且处理的方式咩有那么繁琐。不同于其它语言，没有 `throw/try/catch`。
+
+```v
+user := repo.find_user_by_id(7) or {
+	println(err) // "User 7 not found"
+	return
+}
+```
+
+### 处理选项
+
+有 4 中处理选项的方式。
+
+第一种，直接传递给上层：
+
+```v
+import net.http
+
+fn f(url string) ?string {
+	resp := http.get(url) ?
+	return resp.text
+}
+```
+
+因为 `http.get` 返回 `?http.Response`，f 中没有处理而是直接传递给调用 f 的函数，所有 f 函数返回值也要加上 `?`。如果错误传递到 main 函数仍然没有处理，会发生 panic。
+
+上诉 f 函数本质上是：
+
+```v
+    resp := http.get(url) or { return err }
+    return resp.text
+```
+
+第二种，提前中断执行：
+
+```v
+user := repo.find_user_by_id(7) or { return }
+```
+
+这里，你要么调用 `panic()` 或 `exit()`，结束整个程序。要么使用控制流表达式（`return`, `break`, `continue`, 等）结束当前代码块。注意，`break` 和`continue`只能用在 for 循环中。
+
+V 不能强制分解选项（例如 Rust 中的 `unwarp()` 或 Swift 的 `!` ）。而是使用 `or { panic(err.msg) }` 替代。
+
+第三种，在 or 块中提供默认值，如果发送错误，会将这个默认值赋予变量，这个默认值值必须和变量是相同类型。
+
+```v
+fn do_something(s string) ?string {
+	if s == 'foo' {
+		return 'foo'
+	}
+	return error('invalid string') // `return none` 也行
+}
+
+a := do_something('foo') or { 'default' } // a 会是 'foo'
+b := do_something('bar') or { 'default' } // b 会是 'default'
+println(a)
+println(b)
+```
+
+第四种，使用 if 分解：
+
+```v
+import net.http
+
+if resp := http.get('https://google.com') {
+	println(resp.text) // resp 是 http.Response 而不是选项类型
+} else {
+	println(err)
+}
+```
+
+上述代码中，resp 只能在 if 的第一个分支中，err 只能在 else 分支中。
 
 # 泛型
 
