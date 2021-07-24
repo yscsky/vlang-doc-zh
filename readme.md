@@ -2168,11 +2168,161 @@ git commit -m "INIT"
 
 6 最终模块的名字是 github 账号和模块名的拼接，例如：`mygithubname.mymodule`。
 
-可选：给模块打标签，更方便搜索。
+可选：给模块打标签（git tag），更方便搜索。
 
 # 类型声明
 
 ## 接口
+
+```v
+struct Dog {
+	breed string
+}
+
+struct Cat {
+	breed string
+}
+
+fn (d Dog) speak() string {
+	return 'woof'
+}
+
+fn (c Cat) speak() string {
+	return 'meow'
+}
+
+// 不同于 Go 但类似于 TypeScript, V 的接口除了方法还可以定义字段
+interface Speaker {
+	breed string
+	speak() string
+}
+
+dog := Dog{'Leonberger'}
+cat := Cat{'Siamese'}
+
+mut arr := []Speaker{}
+arr << dog
+arr << cat
+for item in arr {
+	println('a $item.breed says: $item.speak()')
+}
+```
+
+一个类型实现一个接口，只要实现接口的方法和字段，无需特别声明这个实现关系，也就是没有 "implements" 关键字。
+
+### 转换接口
+
+使用动态转换符 `is` 可以测试一个接口底层实际类型是什么：
+
+```v
+interface Something {}
+
+fn announce(s Something) {
+	if s is Dog {
+		println('a $s.breed dog') // `s` 自动转换为 `Dog`
+	} else if s is Cat {
+		println('a $s.breed cat')
+	} else {
+		println('something else')
+	}
+}
+```
+
+更多参见[动态转换](#动态转换)。
+
+### 接口方法定义
+
+接口也能实现方法，也就是一个接口可以实现另一个接口的方法。当一个结构体被包装成一个接口，两者都实现相同的接口方法。此时接口变量调用的是接口实现的方法：
+
+```v
+struct Cat {}
+
+fn (c Cat) speak() string {
+	return 'meow!'
+}
+
+interface Adoptable {}
+
+fn (a Adoptable) speak() string {
+	return 'adopt me!'
+}
+
+fn new_adoptable() Adoptable {
+	return Cat{}
+}
+
+fn main() {
+	cat := Cat{}
+	assert cat.speak() == 'meow!'
+	a := new_adoptable() // 此时 a 的类型是 Adoptable
+	assert a.speak() == 'adopt me!'
+	if a is Cat { // 此时 a 的类型转换成 Cat
+		println(a.speak()) // meow!
+	}
+}
+```
+
+## 函数类型
+
+使用类型别名来命名一个函数签名，例如：
+
+```v
+type Filter = fn (string) string
+```
+
+这样就和类型一样，函数可以使用函数类型作为参数：
+
+```v
+type Filter = fn (string) string
+
+fn filter(s string, f Filter) string {
+	return f(s)
+}
+```
+
+函数声明时无需特别定义，只要签名相同就可以使用：
+
+```v
+fn uppercase(s string) string {
+	return s.to_upper()
+}
+
+// `uppercase` 可以传入任何使用 Filter 的地方
+```
+
+也可以明确定义函数类型：
+
+```v
+my_filter := Filter(uppercase)
+```
+
+这个转换纯粹是为了方便检查，其实可以无需特别声明：
+
+```v
+my_filter := uppercase
+```
+
+可以传递一个赋值的函数变量作为参数：
+
+```v
+println(filter('Hello world', my_filter)) // 打印 `HELLO WORLD`
+```
+
+也可以直接传递函数无需声明本地变量：
+
+```v
+println(filter('Hello world', uppercase))
+```
+
+匿名函数也可以：
+
+```v
+println(filter('Hello world', fn (s string) string {
+	return s.to_upper()
+}))
+```
+
+完整[例子](demos/function/types.v)。
 
 ## 枚举
 
