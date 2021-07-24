@@ -2472,6 +2472,114 @@ three
 one
 ```
 
+### 动态转换
+
+检查一个联合类型的实例是否持有特定类型，使用 `sum is Type`。转换为特定类型，使用 `sum as Type`：
+
+```v
+struct Moon {}
+
+struct Mars {}
+
+struct Venus {}
+
+type World = Mars | Moon | Venus
+
+fn (m Mars) dust_storm() bool {
+	return true
+}
+
+fn main() {
+	mut w := World(Moon{})
+	assert w is Moon
+	w = Mars{}
+	// 使用 `as` 转换成 Mars 实例
+	mars := w as Mars
+	if mars.dust_storm() {
+		println('bad weather!')
+	}
+}
+```
+
+as 转换时如果不是 Mars 类型实例，会产生 panic。所以更安全的方式是使用智能转换。
+
+### 智能转换
+
+```v
+if w is Mars {
+	assert typeof(w).name == 'Mars'
+	if w.dust_storm() {
+		println('bad weather!')
+	}
+}
+```
+
+在 if 中 w 的类型就是 Mars，这就是 _flow-sensitive typing_。如果 w 是可变变量，需要在 w 前添加 mut，告诉编译器：
+
+```v
+if mut w is Mars {
+	assert typeof(w).name == 'Mars'
+	if w.dust_storm() {
+		println('bad weather!')
+	}
+}
+```
+
+否则 w 保持原来的类型不变。对于复杂表达式 user.name 同样适用。
+
+### 匹配联合类型
+
+使用 match 可以确定类型：
+
+```v
+struct Moon {}
+
+struct Mars {}
+
+struct Venus {}
+
+type World = Mars | Moon | Venus
+
+fn open_parachutes(n int) {
+	println(n)
+}
+
+fn land(w World) {
+	match w {
+		Moon {}
+		Mars {
+			open_parachutes(3)
+		}
+		Venus {
+			open_parachutes(1)
+		}
+	}
+}
+```
+
+match 必须列举所有可能类型或者使用 else 分支：
+
+```v
+struct Moon {}
+struct Mars {}
+struct Venus {}
+
+type World = Moon | Mars | Venus
+
+fn (m Moon) moon_walk() {}
+fn (m Mars) shiver() {}
+fn (v Venus) sweat() {}
+
+fn pass_time(w World) {
+    match w {
+        // w 在各个分之中会自动转换
+        Moon { w.moon_walk() }
+        Mars { w.shiver() }
+        else {}
+    }
+}
+```
+
 ## 类型别名
 
 使用别名的方式定义一个新类型，例如：`type NewType = ExistingType`。
