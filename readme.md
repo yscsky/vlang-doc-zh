@@ -1926,11 +1926,60 @@ vfmt 也就自动识别，在模块内使用常量不加模块名，执行 vfmt 
 
 # 内建函数
 
+有些函数像 `println` 是内建函数，有如下：
 
+```v
+fn print(s string) // 打印任何东西到标准输出
+fn println(s string) // 打印任何东西到标准输出并换行
 
+fn eprint(s string) // 打印任何东西到错误输出
+fn eprintln(s string) // 打印任何东西到错误输出并换行
 
+fn exit(code int) // 使用自定义值退出程序
+fn panic(s string) // 打印一个消息和堆栈信息到错误输出，并以错误码1结束程序
+fn print_backtrace() // 打印堆栈信息到错误输出
+```
+
+`println` 是一个简单但强大的内建函数，可以打印任何类型：strings, numbers, arrays, maps, structs。
+
+```v
+struct User {
+	name string
+	age  int
+}
+
+println(1) // "1"
+println('hi') // "hi"
+println([1, 2, 3]) // "[1, 2, 3]"
+println(User{ name: 'Bob', age: 20 }) // "User{name:'Bob', age:20}"
+```
+
+# 打印自定义类型
+
+自定义类型实现 `.str() string` 方法，能自定义输出内容：
+
+```v
+struct Color {
+	r int
+	g int
+	b int
+}
+
+pub fn (c Color) str() string {
+	return '{$c.r, $c.g, $c.b}'
+}
+
+red := Color{
+	r: 255
+	g: 0
+	b: 0
+}
+println(red) // {255, 0, 0}
+```
 
 # 模块
+
+
 
 # 附录
 
