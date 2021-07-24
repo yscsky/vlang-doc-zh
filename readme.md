@@ -1138,7 +1138,7 @@ if parser.token in [.plus, .minus, .div, .mult] {
 
 V 会优化上面的表达式，这两种方式都会生成相同的机器代码，不会有数组被创建。
 
-## For循环
+## For 循环
 
 V 只用一个循环关键字 for，有不同的用法。
 
@@ -1258,7 +1258,7 @@ for i in 0 .. 5 {
 }
 ```
 
-`low .. high` 表示从 low 开始包含 low 到 high 结束但不包含 high的区间 [lwo, high)。
+`low .. high` 表示从 low 开始包含 low 到 high 结束但不包含 high 的区间 [lwo, high)。
 
 ### 条件 for 循环
 
@@ -1369,7 +1369,7 @@ fn is_red_or_blue(c Color) bool {
 }
 ```
 
-match 对象是 enum 枚举时可以使用 `.variant_here`  短句语法，当每个枚举值列举时 else 是不能存在的。
+match 对象是 enum 枚举时可以使用 `.variant_here` 短句语法，当每个枚举值列举时 else 是不能存在的。
 
 ```v
 c := `v`
@@ -1571,7 +1571,7 @@ new_button(ButtonConfig{text:'Click me', width:100})
 
 这个只有当函数最后一个参数是结构体才有效。
 
-## 访问修饰符 
+## 访问修饰符
 
 结构体字段默认是私有并不可变的。通过访问修饰符来改变，总共有 5 种形式：
 
@@ -1634,7 +1634,7 @@ user2 := User{
 println(user2.can_register()) // "true"
 ```
 
-V 没有类，但是可以在类型上定义方法。方法是具有特殊接收器参数的函数，接收器出现在 fn 关键字和方法名称之间，有它自己的参数列表， 方法必须与接收器类型在同一模块中。 
+V 没有类，但是可以在类型上定义方法。方法是具有特殊接收器参数的函数，接收器出现在 fn 关键字和方法名称之间，有它自己的参数列表， 方法必须与接收器类型在同一模块中。
 
 在上述例子中，`can_register` 方法的接收器是类型 User 的变量 u。这里习惯上不使用 self 和 this，而是一个简短的最好单字母长度的名字。
 
@@ -1680,11 +1680,148 @@ unsafe {
 
 ## 默认为纯函数
 
+V 函数默认是纯函数，这意味着返回值只是函数的参数，并且对其计算没有副作用（除了 I/O）。 
+
+这是由于没有全局变量和所有函数默认不可变参数导致的，即使传递的是引用也一样。
+
+然而 V 不是纯函数的语言，在编译选项中可以设置开启全局变量（`-enable-globals`），但是这个选项是为底层应用如内核、驱动所设计的。
+
+## 可变参数
+
+使用 mut 关键字可以是函数参数可变：
+
+```v
+truct User {
+	name string
+mut:
+	is_registered bool
+}
+
+fn (mut u User) register() {
+	u.is_registered = true
+}
+
+mut user := User{}
+println(user.is_registered) // "false"
+user.register()
+println(user.is_registered) // "true"
+```
+
+上述代码中，接收器被定义成可变，则 `regiter()` 函数可以改变其值。同样也适用于非接收器的参数：
+
+```v
+fn multiply_by_2(mut arr []int) {
+	for i in 0 .. arr.len {
+		arr[i] *= 2
+	}
+}
+
+mut nums := [1, 2, 3]
+multiply_by_2(mut nums)
+println(nums)
+// "[2, 4, 6]"
+```
+
+注意在调用函数是必须在 nums 前添加 mut，明确函数调用会修改其值。
+
+更推荐使用返回值的方式替代参数修改，参数修改只应该在性能要求较高的场景使用，减少内存分配和数据复制。
+
+因此，V 不允许对原始变量进行参数修改，只有复杂类型，如数组，map 这种可以修改。
+
+使用 `user.register()` 或 `user = register(user)` 替代 `register(mut user)`。
+
+## 结构更新语法
+
+V 提供简洁的方式返回更新结构：
+
+```v
+struct User {
+	name          string
+	age           int
+	is_registered bool
+}
+
+fn register(u User) User {
+	return User{
+		...u
+		is_registered: true
+	}
+}
+
+mut user := User{
+	name: 'abc'
+	age: 23
+}
+user = register(user)
+println(user)
+```
+
+## 可变数量参数
+
+```v
+n sum(a ...int) int {
+	mut total := 0
+	for x in a {
+		total += x
+	}
+	return total
+}
+
+println(sum()) // 0
+println(sum(1)) // 1
+println(sum(2, 3)) // 5
+a := [2, 3, 4]
+println(sum(...a)) // 使用 ... 前缀进行数组分解，output: 9
+b := [5, 6, 7]
+println(sum(...b)) // output: 18
+```
+
+## 匿名和高阶函数
+
+```v
+fn sqr(n int) int {
+	return n * n
+}
+
+fn cube(n int) int {
+	return n * n * n
+}
+
+fn run(value int, op fn (int) int) int {
+	return op(value)
+}
+
+fn main() {
+	// 函数可以作为参数传递给另一个函数
+	println(run(5, sqr)) // "25"
+	// 匿名函数可以声明在一个函数内
+	double_fn := fn (n int) int {
+		return n + n
+	}
+	println(run(5, double_fn)) // "10"
+	// 函数可以传递给另一个函数时不声明名字
+	res := run(5, fn (n int) int {
+		return n + n
+	})
+	println(res) // "10"
+	// 可以声明函数数组或 map
+	fns := [sqr, cube]
+	println(fns[0](10)) // "100"
+	fns_map := map{
+		'sqr':  sqr
+		'cube': cube
+	}
+	println(fns_map['cube'](2)) // "8"
+}
+```
+
+# 引用
+
 # 模块
 
 # 附录
 
-## 附录1：关键字
+## 附录 1：关键字
 
 V 有 41 个保留关键字：
 
@@ -1732,7 +1869,7 @@ unsafe
 __offsetof
 ```
 
-## 附录2：操作符
+## 附录 2：操作符
 
 下面操作符只适用于原始类型：
 
@@ -1770,4 +1907,3 @@ Assignment Operators
 &=   |=   ^=
 >>=  <<=
 ```
-
