@@ -2703,6 +2703,69 @@ if resp := http.get('https://google.com') {
 
 # 泛型
 
+```v
+struct Repo<T> {
+    db DB
+}
+
+struct User {
+	id   int
+	name string
+}
+
+struct Post {
+	id   int
+	user_id int
+	title string
+	body string
+}
+
+fn new_repo<T>(db DB) Repo<T> {
+    return Repo<T>{db: db}
+}
+
+// 泛型函数，V 会为每个使用的类型生成函数
+fn (r Repo<T>) find_by_id(id int) ?T {
+    table_name := T.name // 在这个例子中获取类型的名字就是获取表名
+    return r.db.query_one<T>('select * from $table_name where id = ?', id)
+}
+
+db := new_db()
+users_repo := new_repo<User>(db) // 返回 Repo<User>
+posts_repo := new_repo<Post>(db) // 返回 Repo<Post>
+user := users_repo.find_by_id(1)? // find_by_id<User>
+post := posts_repo.find_by_id(1)? // find_by_id<Post>
+```
+
+当前泛型函数定义必须声明它们的类型参数，但将来 V 将从运行时参数类型中的单字母类型名称推断泛型类型参数。这就是 `find_by_id` 可以省略 `<T>` 的原因，因为接收器参数 r 使用泛型类型 T。
+
+另一个例子：
+
+```v
+fn compare<T>(a T, b T) int {
+	if a < b {
+		return -1
+	}
+	if a > b {
+		return 1
+	}
+	return 0
+}
+
+// compare<int>
+println(compare(1, 0)) // Outputs: 1
+println(compare(1, 1)) //          0
+println(compare(1, 2)) //         -1
+// compare<string>
+println(compare('1', '0')) // Outputs: 1
+println(compare('1', '1')) //          0
+println(compare('1', '2')) //         -1
+// compare<f64>
+println(compare(1.1, 1.0)) // Outputs: 1
+println(compare(1.1, 1.1)) //          0
+println(compare(1.1, 1.2)) //         -1
+```
+
 # 并发
 
 ## 生成并发任务
