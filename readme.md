@@ -1448,7 +1448,233 @@ fn main() {
 
 # 结构体 Struct
 
+```v
+struct Point {
+	x int
+	y int
+}
+
+mut p := Point{
+	x: 10
+	y: 20
+}
+println(p.x) // 结构体中字段通过点号使用 Struct fields are accessed using a dot
+// 声明 3 个或更少字段的结构体的简短语法
+p = Point{10, 20}
+assert p.x == 10
+```
+
+## 堆上的结构体
+
+结构体是分配在栈上的，如果要分配到堆上，并获得一个应用，使用 `&` 前缀：
+
+```v
+struct Point {
+	x int
+	y int
+}
+
+p := &Point{10, 10}
+// 引用使用相同的方式获取字段
+println(p.x)
+```
+
+p 的类型是 `&Point`，是 `Point` 的引用。应用类似于 Go 的指针和 C++ 的引用。
+
+## 内嵌结构体
+
+V 没有继承，但是支持内嵌结构体：
+
+```v
+struct Widget {
+mut:
+	x int
+	y int
+}
+
+struct Button {
+	Widget
+	title string
+}
+
+mut button := Button{
+	title: 'Click me'
+}
+button.x = 3
+```
+
+没有内嵌，则必须命名 Wiget 字段：
+
+```v
+button.widget.x = 3
+```
+
+## 默认字段值
+
+```v
+struct Foo {
+	n   int    // n 默认是 0
+	s   string // s 默认是 ''
+	a   []int  // a 默认是 `[]int{}`
+	pos int = -1 // 自定义默认值
+}
+```
+
+结构体创建时所有字段都会分配默认零值，数组和 map 也会分配。也可以自定义默认值。
+
+## 必须的字段
+
+```v
+struct Foo {
+	n int [required]
+}
+```
+
+可以标记结构体中某个字段 `[required]` 属性，那么在结构体创建时，这个字段必须显式的初始化。
+
+## 尾部结构体字面语法
+
+V 没有默认函数参数和命名参数，使用尾部结构体字面语法替代：
+
+```v
+struct ButtonConfig {
+	text        string
+	is_disabled bool
+	width       int = 70
+	height      int = 20
+}
+
+struct Button {
+	text   string
+	width  int
+	height int
+}
+
+fn new_button(c ButtonConfig) &Button {
+	return &Button{
+		width: c.width
+		height: c.height
+		text: c.text
+	}
+}
+
+button := new_button(text: 'Click me', width: 100)
+// height 没有设置，使用默认值
+assert button.height == 20
+```
+
+new_button 函数原本传入 ButtonConfig 结构体，但是可以省略结构名和大括号，原本写法：
+
+```v
+new_button(ButtonConfig{text:'Click me', width:100})
+```
+
+这个只有当函数最后一个参数是结构体才有效。
+
+## 访问修饰符 
+
+结构体字段默认是私有并不可变的。通过访问修饰符来改变，总共有 5 种形式：
+
+```v
+struct Foo {
+	a int // 私有不可变（默认）
+mut:
+	b int // 私有可变
+	c int // 可以列举多个在同一个修饰符下
+pub:
+	d int // 公开不可变（只读）
+pub mut:
+	e int // 公开但只有在父模块中可变
+__global:
+	// (不推荐使用，这也就是为什么在 'global' 前面加 __)
+	f int // 随处公开可变
+}
+```
+
+例如在 `builtin` 模块中的 `string` 类型：
+
+```v
+struct string {
+    str &byte
+pub:
+    len int
+}
+```
+
+其中 string 定义 str &byte 是私有不可变的，不能在 `builtin` 模块外访问，而 len 是公开不可变的：
+
+```v
+fn main() {
+	str := 'hello'
+	len := str.len // OK
+	str.len++ // 编译错误
+}
+```
+
+在 V 中定义只读公开字段是很容易的，无需定义获取方法。
+
+## 方法
+
+```v
+struct User {
+	age int
+}
+
+fn (u User) can_register() bool {
+	return u.age > 16
+}
+
+user := User{
+	age: 10
+}
+println(user.can_register()) // "false"
+user2 := User{
+	age: 20
+}
+println(user2.can_register()) // "true"
+```
+
+V 没有类，但是可以在类型上定义方法。方法是具有特殊接收器参数的函数，接收器出现在 fn 关键字和方法名称之间，有它自己的参数列表， 方法必须与接收器类型在同一模块中。 
+
+在上述例子中，`can_register` 方法的接收器是类型 User 的变量 u。这里习惯上不使用 self 和 this，而是一个简短的最好单字母长度的名字。
+
 # 共用体 Unions
+
+和结构体一样，共用体支持内嵌：
+
+```v
+struct Rgba32_Component {
+	r byte
+	g byte
+	b byte
+	a byte
+}
+
+union Rgba32 {
+	Rgba32_Component
+	value u32
+}
+
+clr1 := Rgba32{
+	value: 0x008811FF
+}
+
+clr2 := Rgba32{
+	Rgba32_Component: {
+		a: 128
+	}
+}
+
+sz := sizeof(Rgba32)
+unsafe {
+	println('Size: ${sz}B, clr1.b: $clr1.b, clr2.b: $clr2.b')
+    // Size: 4B, clr1.b: 136, clr2.b: 0
+}
+```
+
+共用体成员必须在 `unsafe` 块中访问。
+
+注意：嵌套结构体参数不一定是按罗列顺序存储的。
 
 # 函数 2
 
