@@ -2326,9 +2326,157 @@ println(filter('Hello world', fn (s string) string {
 
 ## 枚举
 
+```v
+enum Color {
+	red
+	green
+	blue
+}
+
+mut color := Color.red
+// V 知道 `color` 是 `Color` 枚举类型， 无需使用 `color = Color.green`
+color = .green
+println(color) // "green"
+match color {
+	.red { println('the color was red') }
+	.green { println('the color was green') }
+	.blue { println('the color was blue') }
+}
+```
+
+在 match 中使用枚举要么完全列举，要么使用 else，确保有新枚举字段添加时，能完全覆盖到。
+
+枚举字段不能使用保留关键字，如果使用前面需要加 @。
+
+```v
+enum Color {
+	@none
+	red
+	green
+	blue
+}
+
+color := Color.@none
+println(color)
+```
+
+整数可以赋值到枚举字段中：
+
+```v
+enum Grocery {
+	apple
+	orange = 5
+	pear
+}
+
+g1 := int(Grocery.apple)
+g2 := int(Grocery.orange)
+g3 := int(Grocery.pear)
+println('Grocery IDs: $g1, $g2, $g3') // Grocery IDs: 0, 5, 6
+```
+
+枚举值不能进行计算操作，操作的话需要转换成整型。
+
 ## 联合类型
 
+联合类型的实例可以表示多个类型中的一个。使用 type 关键字定义：
+
+```v
+struct Moon {}
+
+struct Mars {}
+
+struct Venus {}
+
+type World = Mars | Moon | Venus
+
+sum := World(Moon{})
+assert sum.type_name() == 'Moon'
+println(sum)
+```
+
+内建函数 `type_name` 返回当前表示的类型名字。
+
+利用联合类型可以构建简洁有效的递归结构代码：
+
+```v
+// V 二叉树
+struct Empty {}
+
+struct Node {
+	value f64
+	left  Tree
+	right Tree
+}
+
+type Tree = Empty | Node
+
+// 节点值求和
+fn sum(tree Tree) f64 {
+	return match tree {
+		Empty { 0 }
+		Node { tree.value + sum(tree.left) + sum(tree.right) }
+	}
+}
+
+fn main() {
+	left := Node{0.2, Empty{}, Empty{}}
+	right := Node{0.3, Empty{}, Node{0.4, Empty{}, Empty{}}}
+	tree := Node{0.5, left, right}
+	println(sum(tree)) // 0.2 + 0.3 + 0.4 + 0.5 = 1.4
+}
+```
+
+枚举也可以定义方法，和结构体一样：
+
+```v
+enum Cycle {
+	one
+	two
+	three
+}
+
+fn (c Cycle) next() Cycle {
+	match c {
+		.one {
+			return .two
+		}
+		.two {
+			return .three
+		}
+		.three {
+			return .one
+		}
+	}
+}
+
+mut c := Cycle.one
+for _ in 0 .. 10 {
+	println(c)
+	c = c.next()
+}
+```
+
+输出：
+
+```
+one
+two
+three
+one
+two
+three
+one
+two
+three
+one
+```
+
 ## 类型别名
+
+使用别名的方式定义一个新类型，例如：`type NewType = ExistingType`。
+
+这是联合类型的一种特殊形式。
 
 ## 可选/结果类型和错误处理
 
@@ -2366,7 +2514,7 @@ println(filter('Hello world', fn (s string) string {
 
 ## 附录 1：关键字
 
-V 有 41 个保留关键字：
+V 有 41 个保留关键字（3 个字面值 none，true，false）：
 
 ```v
 as
