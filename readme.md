@@ -1680,7 +1680,7 @@ unsafe {
 
 ## 默认为纯函数
 
-V 函数默认是纯函数，这意味着返回值只是函数的参数，并且对其计算没有副作用（除了 I/O）。 
+V 函数默认是纯函数，这意味着返回值只是函数的参数，并且对其计算没有副作用（除了 I/O）。
 
 这是由于没有全局变量和所有函数默认不可变参数导致的，即使传递的是引用也一样。
 
@@ -1816,6 +1816,119 @@ fn main() {
 ```
 
 # 引用
+
+```v
+struct Foo {}
+
+fn (foo Foo) bar_method() {
+	// ...
+}
+
+fn bar_function(foo Foo) {
+	// ...
+}
+```
+
+如果函数参数是不可变的，V 可能通过值或引用的形式传递，这个由编译器决定。开发者无需关心，不需要去记住传动的结构体是值还是引用。如果需要确保传递的是引用，则加上 `&`：
+
+```v
+struct Foo {
+	abc int
+}
+
+fn (foo &Foo) bar() {
+	println(foo.abc)
+}
+```
+
+foo 依旧是不可变的，即使使用引用，要可变的话，必须使用 `(mut foo Foo)`。
+
+通常来讲，V 的引用类似于 Go 的指针和 C++ 的引用。一个泛型的树结构定义：
+
+```v
+struct Node<T> {
+	val   T
+	left  &Node<T>
+	right &Node<T>
+}
+```
+
+# 常量
+
+```v
+const (
+	pi    = 3.14
+	world = '世界'
+)
+
+println(pi)
+println(world)
+```
+
+使用 `const` 定义常量，常量只能定义在模块级别（函数外）。常量值不能改变，也可以分开定义：
+
+```v
+const e = 2.71828
+```
+
+V 的常量比其它语言的常量更加灵活，可以赋值复杂类型：
+
+```v
+struct Color {
+	r int
+	g int
+	b int
+}
+
+fn rgb(r int, g int, b int) Color {
+	return Color{
+		r: r
+		g: g
+		b: b
+	}
+}
+
+const (
+	numbers = [1, 2, 3]
+	red     = Color{
+		r: 255
+		g: 0
+		b: 0
+	}
+	// 会在编译的时候评估函数调用*
+	blue = rgb(0, 0, 255)
+)
+
+println(numbers)
+println(red)
+println(blue)
+```
+
+*目前函数的调用是在程序启动的时候。普通情况下全局变量是不允许的，所以这就十分有用。
+
+使用 `pub const` 可以将常量公开：
+
+```v
+module mymodule
+
+pub const golden_ratio = 1.61803
+
+fn calc() {
+	println(mymodule.golden_ratio)
+}
+```
+
+pub 关键字只能在 const 关键字之前，不能用在  `const ( )` 中。
+
+声明常量使用 `snake_case` 的形式，为了与本地变量区分，常量使用都要用模块名明确。例如：pi 常量，在 math 模块内外使用都是 `math.pi`。 除了 main 模块之外，main 模块中定义的常量无需加 `main.`。
+
+vfmt 也就自动识别，在模块内使用常量不加模块名，执行 vfmt 之后，会自动加上模块名。
+
+# 内建函数
+
+
+
+
 
 # 模块
 
