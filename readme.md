@@ -3088,6 +3088,89 @@ V 会生成 JSON 编码和解析的代码，不是通过反射实现，因此性
 
 # 测试
 
+## 断言
+
+```v
+fn foo(mut v []int) {
+	v[0] = 1
+}
+
+mut v := [20]
+foo(mut v)
+assert v[0] < 4
+```
+
+使用 assert 关键字来断言后面的表达式是否成立，如果表达式返回 false，则程序会停止，并将表达式两侧的值都打印到错误输出中。assert 多用于检测程序的错误，易于查找未预计产生的值，可以用于任何函数中。
+
+## 测试文件
+
+```v
+// hello.v
+module main
+
+fn hello() string {
+	return 'Hello world'
+}
+
+fn main() {
+	println(hello())
+}
+```
+
+```v
+module main
+
+// hello_test.v
+fn test_hello() {
+	assert hello() == 'Hello world'
+}
+```
+
+执行 `v hello_test.v` 会运行 `test_hello()` 函数，检查 `hello()` 是否返回正确的结果。这个命令会执行 `hello_test.v` 中所有的测试函数。
+
+- 测试函数必须放在以 `_test.v` 结尾的测试文件中
+- 测试函数必须以 `test_` 开头，才能执行
+- 普通函数和其它类型都能在测试文件中声明，并正常使用
+- 有两种测试文件：外部的和内部的
+- 内部的测试文件模块名与要测试的模块名一致，并且可以调用私有的函数和类型
+- 外部的测试文件则需要 import 引入要测试的模块，只能调用公开的 API
+
+上述例子中，`hello_test.v` 和 `hello.v` 都是 `main` 模块的，所以是内部测试文件。
+
+在测试文件中可以定义特殊的测试函数：
+
+- `testsuite_begin` 在运行所有测试函数前调用
+- `testsuite_end` 在运行所有测试函数后调用
+
+如果测试函数中有错误返回，任何错误传递都会使测试失败：
+
+```v
+import strconv
+
+fn test_atoi() ? {
+	assert strconv.atoi('1') ? == 1
+	assert strconv.atoi('one') ? == 1 // 测试失败
+}
+```
+
+## 运行测试
+
+运行单个测试文件 `v foo_test.v`，运行这个模块的测试 `v test mymodule`，或者 `v test .` 这会运行当前文件夹包其子文件夹下所有测试文件。使用 `--stats` 可以各个测试单元的详细信息。
+
+可以创建一个名为 `testdata` 的文件夹存放额外的特殊数据（包括 .v 源文件），紧邻 \_test.v 文件。V 的测试框架在运行测试时会忽略此类文件夹。想放置带有无效 V 源代码或其他测试（包括已知失败的测试）的 .v 文件时就很有用，这些测试由 parent \_test.v 文件以特定方式/选项运行。
+
+V 编译器的路径可由 @EXE 获取，所有在一个测试文件中，可以直接运行另一个测试文件：
+
+```v
+import os
+
+fn test_subtest() {
+	res := os.execute('${@VEXE} other_test.v')
+	assert res.exit_code == 1
+	assert res.output.contains('other_test.v does not exist')
+}
+```
+
 # 内存管理
 
 ## 堆栈
