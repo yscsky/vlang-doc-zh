@@ -3399,7 +3399,7 @@ fn main() {
 
 然而，如上文提到栈空间是很有限的，因此一些比较大的结构体更适合使用 [heap] 属性声明，将其分配在堆中，即使不是上述所要求的情况。
 
-有另一中方式可以根据情况手动控制分配，虽然不推荐但还是展现在这里：
+有另一种方式可以根据情况手动控制分配，虽然不推荐但还是展示在这里：
 
 ```v
 struct MyStruct {
@@ -3443,13 +3443,108 @@ fn (mut r RefStruct) f(s &MyStruct) {
 }
 ```
 
-unsafe 块会禁止编译器检查，为了使 s 即使没有使用 [heap] 属性也被分配到堆上，需要是用 &MyStruct{...}。
+unsafe 块会禁止编译器检查，使用 &MyStruct{...} 的声明方式，使得 s 即使没有使用 [heap] 属性也被分配到堆上。
 
-最后一步编译器不是必须的，但是没有的话，引用中 r 会是非法的，指向的内存区域被 use_stack 函数重写了，程序或许会崩溃，或至少产生无法预料的输出。这就是为什么该方法是不安全的，应避免使用。
+最后一步编译器不是必须的，但是没有的话，引用中 r 会是非法的，指向的内存区域被 use_stack 函数重写了，程序会崩溃，或至少产生无法预料的输出。这就是为什么该方法是不安全的，应避免使用。
 
 # ORM
 
-# 文档输出
+（仍然在 alpha 阶段）
+
+V 自身支持 ORM（对象关系映射），支持 SQLite，MySQL 和 Postgres，后续也会支持 MS SQL 和 Oracle。
+
+V 的 ORM 有如下优势：
+
+- 对所有SQL都采用统一的语法，迁移数据库时更加方便。
+- 查询语句使用 V 语法构造，无需学习新的语法。
+- 安全，所有查询语句自动检查，防止 SQL 注入。
+- 编译时检查，避免在运行时才发现拼写错误。
+- 简单易理解，无需手动解析查询结果，构造对象。
+
+```v
+import sqlite
+
+struct Customer {
+	// 目前结构体名就是表名
+	id        int    [primary; sql: serial] // 自增 `id` 必须是第一个
+	name      string [nonull]
+	nr_orders int
+	country   string [nonull]
+}
+
+db := sqlite.connect('customers.db') ?
+
+// 创建表
+// CREATE TABLE IF NOT EXISTS `Customer` (`id` INTEGER PRIMARY KEY, `name` TEXT NOT NULL, `nr_orders` INTEGER, `country` TEXT NOT NULL)
+sql db {
+	create table Customer
+}
+
+// select count(*) from Customer
+nr_customers := sql db {
+	select count from Customer
+}
+println('number of all customers: $nr_customers')
+// V 语法可以用来构建查询语句
+uk_customers := sql db {
+	select from Customer where country == 'uk' && nr_orders > 0
+}
+println(uk_customers.len)
+for customer in uk_customers {
+	println('$customer.id - $customer.name')
+}
+// 添加 `limit 1` 只返回一个结果
+customer := sql db {
+	select from Customer where id == 1 limit 1
+}
+println('$customer.id - $customer.name')
+// 插入一个新的 customer
+new_customer := Customer{
+	name: 'Bob'
+	nr_orders: 10
+}
+sql db {
+	insert new_customer into Customer
+}
+```
+
+更多例子和文档参见：[vlib/orm](https://github.com/vlang/v/tree/master/vlib/orm)。
+
+# 文档编写
+
+文档编写
+
+The way it works is very similar to Go. It's very simple: there's no need to write documentation separately for your code, vdoc will generate it from docstrings in the source code.
+
+Documentation for each function/type/const must be placed right before the declaration:
+
+```v
+// clearall clears all bits in the array
+fn clearall() {
+}
+```
+
+The comment must start with the name of the definition.
+
+Sometimes one line isn't enough to explain what a function does, in that case comments should span to the documented function using single line comments:
+
+```v
+// copy_all recursively copies all elements of the array by their value,
+// if `dupes` is false all duplicate values are eliminated in the process.
+fn copy_all(dupes bool) {
+	// ...
+}
+```
+
+By convention it is preferred that comments are written in *present tense*.
+
+An overview of the module must be placed in the first comment right after the module's name.
+
+To generate documentation use vdoc, for example `v doc net.http`.
+
+
+
+
 
 # 工具
 
