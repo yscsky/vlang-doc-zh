@@ -3582,6 +3582,149 @@ fn main() {
 
 # 进阶
 
+## 运行时追踪表达式
+
+使用 dump(expr) 可以追踪 V 表示式值的变化，例如 factorial.v：
+
+```v
+fn factorial(n u32) u32 {
+	if dump(n <= 1) {
+		return dump(1)
+	}
+	return dump(n * factorial(n - 1))
+}
+
+fn main() {
+	println(factorial(5))
+}
+```
+
+运行 v run factorial.v，得到：
+
+```sh
+[factorial.v:2] n <= 1: false
+[factorial.v:2] n <= 1: false
+[factorial.v:2] n <= 1: false
+[factorial.v:2] n <= 1: false
+[factorial.v:2] n <= 1: true
+[factorial.v:3] 1: 1
+[factorial.v:5] n * factorial(n - 1): 2
+[factorial.v:5] n * factorial(n - 1): 6
+[factorial.v:5] n * factorial(n - 1): 24
+[factorial.v:5] n * factorial(n - 1): 120
+120
+```
+
+注意 dump(expr) 会打印源文件位置，表示式本身和表示式值。
+
+## 内存不安全代码
+
+## 属性
+
+V 使用属性来修改函数和结构体的行为，属性使用 [ ] 定义在函数、结构体、枚举前，只有如下属性声明：
+
+```v
+// 调用函数时会返回被弃用的警告
+[deprecated]
+fn old_function() {
+}
+
+// 可以自定义警告信息
+[deprecated: 'use new_function() instead']
+fn legacy_function() {}
+
+// 内联函数
+[inline]
+fn inlined_function() {
+}
+
+// 不内联函数
+[noinline]
+fn function() {
+}
+
+// 这种函数不会返回到其调用者。
+// 这种函数可以用在 or 块结尾, 如 exit/1 或 panic/1。
+// 这种函数没有返回类型， 并已 for{} 结束，或者被其他 `[noreturn]` 函数调用。
+[noreturn]
+fn forever() {
+	for {}
+}
+
+// 修饰的结构体必须分配在堆上，可以被用作引用(`&Window`)或用在其它引用内(`&OuterStruct{ Window{...} }`)。
+// 可以看堆栈一节。
+[heap]
+struct Window {
+}
+
+// 如果设置的参数不对，V 不会编译这个函数和其调用。
+// 使用标志：`v -d flag`
+[if debug]
+fn foo() {
+}
+
+fn bar() {
+	foo() // 如果 `-d debug` 没有，不会被调用。
+}
+
+// 指针参数指向的内存不会被回收
+[keep_args_alive]
+fn C.my_external_function(voidptr, int, voidptr) int
+
+// 调用函数的代码必须在 unsafe{} 块中。
+// 注意 `risky_business()` 中的代码仍然会被检查，除非使用 unsafe{} 块包含。
+// 当调用 `[unsafe]` 的函数时在特定不安全的操作前后，仍然可以检查，更符合 V 的安全策略。
+[unsafe]
+fn risky_business() {
+	// 这里代码仍然会被检查
+	unsafe {
+		// 这里的代码不会被检查，如指针计算，访问联合字段，调用其它 [unsafe] 函数，等...
+		// 通常最好是将 unsafe 块代码最小化。
+	}
+	// 这里代码仍然会被检查
+}
+
+// V 的自动释放引擎不会管理这个函数里面的内存，必须手动释放内存。
+[manualfree]
+fn custom_allocations() {
+}
+
+// 只用于与 C 的交互，告诉 V 接下来的结构体在 C 中定义为 `typedef struct`
+[typedef]
+struct C.Foo {
+}
+
+// 对 Win32 API 代码传递函数时设置
+[windows_stdcall]
+fn C.DefWindowProc(hwnd int, msg int, lparam int, wparam int)
+
+// 只有在 Windows 中使用，
+// 如果引入图形库（gg，ui），优先显示图形窗口不会创建命令行窗口，使得 println() 失效。
+// 使用这个属性可以创建命令行窗口，只有定义在 main 函数之前有效。
+[console]
+fn main() {
+}
+```
+
+## Goto
+
+V 使用 goto 允许无条件调整到一个标签。标签名和 goto 语句要在同一个函数中。goto 可以跳转到外层或更外层代码块中，允许跳过变量初始化，或跳回已释放内存的代码块，因此要求使用 unsafe 代码块。
+
+```v
+if x {
+	// ...
+	if y {
+		unsafe {
+			goto my_label
+		}
+	}
+	// ...
+}
+my_label:
+```
+
+应尽量避免使用 goto，跳出嵌套循环可以使用[带标签的 break 和 continue](#带标签的 break 和 continue)，没有任何内存风险。
+
 # 附录
 
 ## 附录 1：关键字
