@@ -3173,7 +3173,279 @@ fn test_subtest() {
 
 # 内存管理
 
+V 在一开始会使用值类型和字符串缓存来避免不必要的内存开销，提倡一种简单不过度抽象的代码风格。
+
+大多数对象内存（约 90% - 100%）都由 V 的自动释放引擎释放。编译器在编译时会自动插入必要的内存释放调用，仍有一小部分通过引用计数释放。
+
+开发者不需要改变任何代码，依旧有效，像 Python，Go 或 Java，除了没有影响效率的垃圾回收器进行每个对象的追踪和回收。
+
+## 控制
+
+可以利用 V 的自动释放引擎，为自定义类型定义 free 函数：
+
+```v
+struct MyType {}
+
+[unsafe]
+fn (data &MyType) free() {
+	// ...
+}
+```
+
+如编译器使用 C 的 free 函数来释放 C 的数据类型，编译器会在自定义数据类型的变量生命周期结束时静态插入 free 函数调用。
+
+开发者如果想要更多的底层控制，可以使用 `-manualfree` 关闭自动释放引擎，或者在想要手动控制的函数上加 `[manualfree]` 属性。
+
+注意：自动释放引擎在 V 0.3 版本后才会自动生效，此前需要使用 -autofree 手动使用。如果不使用的话，V 程序会产生内存泄漏。
+
+## 例子
+
+```v
+import strings
+
+fn draw_text(s string, x int, y int) {
+	// ...
+}
+
+fn draw_scene() {
+	// ...
+	name1 := 'abc'
+	name2 := 'def ghi'
+	draw_text('hello $name1', 10, 10)
+	draw_text('hello $name2', 100, 10)
+	draw_text(strings.repeat(`X`, 10000), 10, 50)
+	// ...
+}
+```
+
+这些字符串不会从 draw_text 函数中逃逸，所以会在函数调用结束后回收。
+
+实际上，使用 `-prealloc` 的话，前两个调用不会产生内存分配，这个两个字符串很小，V 会使用预分配缓存存放。
+
+```v
+struct User {
+	name string
+}
+
+fn test() []int {
+	number := 7 // 栈中分配变量
+	user := User{} // 栈中分配结构体
+	numbers := [1, 2, 3] // 数字分配在堆上，在函数结束时被释放
+	println(number)
+	println(user)
+	println(numbers)
+	numbers2 := [4, 5, 6] // 数组会返回，因此不在这里释放
+	return numbers2
+}
+```
+
 ## 堆栈
+
+堆栈基本：
+
+如其它编程语言类似，有两个地方用来存放数据：
+
+- 栈，能够以几乎零开销的方式快速进行分配。栈的增减随着函数的调用深度变化，每个函数都有自己的栈调用空间，直到函数返回前都是有效的。没有释放的对象也是必要的，然而这个对象当函数返回是时就无效了。此外，栈空间是有限的，通常每个线程只有几M。
+- 堆，由操作系统管理的大内存区域（通常几G）。堆对象的分配和释放委派给操作系统的特殊函数调用来实现。这就意味着这些对象在多个函数调用中仍然有效，但是相应的管理成本就比较高。
+
+### V 默认的方式
+
+出于性能考虑，V 尽可能将对象分配在栈上，但是明显必须的话，也会分配到堆上。
+
+例如：
+
+```v
+struct MyStruct {
+	n int
+}
+
+struct RefStruct {
+	r &MyStruct
+}
+
+fn main() {
+	q, w := f()
+	println('q: $q.r.n, w: $w.n')
+}
+
+fn f() (RefStruct, &MyStruct) {
+	a := MyStruct{
+		n: 1
+	}
+	b := MyStruct{
+		n: 2
+	}
+	c := MyStruct{
+		n: 3
+	}
+	e := RefStruct{
+		r: &b
+	}
+	x := a.n + c.n
+	println('x: $x')
+	return e, &c
+}
+```
+
+因为 a 从来没有离开 f 函数，a 是分配在栈上的。然而 b 的引用是作为 c 的一部分返回，以及直接返回 c 的引用，因此，b 和 c 是分配在堆上的。
+
+当一个对象的引用做为函数的参数传入，那边这个堆栈分配就变得不是那边清晰：
+
+```v
+struct MyStruct {
+mut:
+	n int
+}
+
+fn main() {
+	mut q := MyStruct{
+		n: 7
+	}
+	w := MyStruct{
+		n: 13
+	}
+	x := q.f(&w) // `q` 和 `w` 的引用传入
+	println('q: $q\nx: $x')
+}
+
+fn (mut a MyStruct) f(b &MyStruct) int {
+	a.n += b.n
+	x := a.n * b.n
+	return x
+}
+```
+
+这里 q.f(&w) 的调用，将引用作为参数传入。由于 a 是 mut 的，b 是引用，所以理论上，会在 main 函数逃逸。然而，它们的生命周期没有在 main 函数内。所以 q 和 w 会分配在栈上。
+
+### 手动控制堆栈
+
+在上一个例子中，V 编译器将 q，w 放在栈上，是因为在调用时能推断这些应用的值只是读取或修改，而不是传递到其它地方。可以理解为将 q，w 借给 f 函数。
+
+但是 f 函数对引用自身做操作的话，事情就不一样了：
+
+```v
+struct RefStruct {
+mut:
+	r &MyStruct
+}
+
+[heap]
+struct MyStruct {
+	n int
+}
+
+fn main() {
+	m := MyStruct{}
+	mut r := RefStruct{
+		r: &m
+	}
+	r.g()
+	println('r: $r')
+}
+
+fn (mut r RefStruct) g() {
+	s := MyStruct{
+		n: 7
+	}
+	r.f(&s) // 引用 `s` 设置到 `r` 中会传递回 `main() `
+}
+
+fn (mut r RefStruct) f(s &MyStruct) {
+	r.r = s // 如果没有 `[heap]` 会触发错误
+}
+```
+
+这里的 f 函数做了一个错误的事情就是将 s 的引用传递给 r。因为 s 的生命周期在 g 函数中，将其引用给到 r，会导致 r 引用了一个栈上的数据，编译器会给以警告。这就使得在 g 函数中调用 r.f(&s)，只是借用 s 的引用是错误的。
+
+处理这种困境的办法是在声明 struct MyStruct 的时候在其上设置 [heap] 属性。这会使得编译器在分配 MyStruct 的对象时都设置在堆中，这样即使 g 返回了 s 的引用依旧是有效的。编译器会考虑到 MyStruct 的对象都是分配到堆中，检查 f 函数时会允许 s 的引用赋值给 r.r。
+
+在其他语言中会常看到这种模式：
+
+```v
+fn (mut a MyStruct) f() &MyStruct {
+	// a 的业务逻辑
+	return &a // 返回 a 的引用
+}
+```
+
+这里 f 函数将 a 的引用既做为接收器又做为函数返回值，这里的目的是可以实现向这样：y = x.f().g() 的链式调用。然而这种方式的问题，会创建第二个 a 的引用，不仅仅是借用，这就使得 MyStruct 不得不声明 [heap] 属性。
+
+在 V 中更好的方式是：
+
+```v
+struct MyStruct {
+mut:
+	n int
+}
+
+fn (mut a MyStruct) f() {
+	// `a` 的业务逻辑
+}
+
+fn (mut a MyStruct) g() {
+	// `a` 的其它业务逻辑
+}
+
+fn main() {
+	x := MyStruct{} // 栈分配
+	mut y := x
+	y.f()
+	y.g()
+	// 替代 `mut y := x.f().g()
+}
+```
+
+这样 [heap] 属性就可以避免，执行效率更好。
+
+然而，如上文提到栈空间是很有限的，因此一些比较大的结构体更适合使用 [heap] 属性声明，将其分配在堆中，即使不是上述所要求的情况。
+
+有另一中方式可以根据情况手动控制分配，虽然不推荐但还是展现在这里：
+
+```v
+struct MyStruct {
+	n int
+}
+
+struct RefStruct {
+mut:
+	r &MyStruct
+}
+
+// 在 `g()` 调用之后覆盖栈空间
+fn use_stack() {
+	x := 7.5
+	y := 3.25
+	z := x + y
+	println('$x $y $z')
+}
+
+fn main() {
+	m := MyStruct{}
+	mut r := RefStruct{
+		r: &m
+	}
+	r.g()
+	use_stack() // 覆盖栈空间
+	println('r: $r')
+}
+
+fn (mut r RefStruct) g() {
+	s := &MyStruct{ // `s` 显式引用堆对象
+		n: 7
+	}
+	// 改变 `&MyStruct` -> `MyStruct`，`r.f(s)` -> `r.f(&s)`
+	// 为了确定栈空间数据被重写
+	r.f(s)
+}
+
+fn (mut r RefStruct) f(s &MyStruct) {
+	r.r = unsafe { s } // 忽略编译器检查
+}
+```
+
+unsafe 块会禁止编译器检查，为了使 s 即使没有使用 [heap] 属性也被分配到堆上，需要是用 &MyStruct{...}。
+
+最后一步编译器不是必须的，但是没有的话，引用中 r 会是非法的，指向的内存区域被 use_stack 函数重写了，程序或许会崩溃，或至少产生无法预料的输出。这就是为什么该方法是不安全的，应避免使用。
 
 # ORM
 
