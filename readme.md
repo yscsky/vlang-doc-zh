@@ -3619,6 +3619,340 @@ fn main() {
 
 ## 内存不安全代码
 
+有时为了效率，会添加底层代码，这有可能产生内存破坏或安全漏洞，V 支持写底层代码，但不是默认的。
+
+V 要求任何潜在的内存不安全操作都要明确标记，可以提示其他人如果发生错误的话，可能是内存安全错误。
+
+产生内存不安全的例子有：
+
+- 指针计算
+- 指针索引
+- 转换指针到一个不匹配的类型中
+- 调用特定 C 函数： `free`，`strlen` 和 `strncmp`。
+
+明确内存不安全操作需要使用 `unsafe` 块包含：
+
+```v
+// allocate 2 uninitialized bytes & return a reference to them
+mut p := unsafe { malloc(2) }
+p[0] = `h` // Error: pointer indexing is only allowed in `unsafe` blocks
+unsafe {
+    p[0] = `h` // OK
+    p[1] = `i`
+}
+p++ // Error: pointer arithmetic is only allowed in `unsafe` blocks
+unsafe {
+    p++ // OK
+}
+assert *p == `i`
+```
+
+最好不要将内存安全的操作放在 unsafe 块中，这样是 unsafe 的使用尽量明确。通常任何代码都可以认为是内存安全的，编译器可以校验。
+
+如果怀疑程序有内存安全问题，首先看 unsafe 块，是如何与周围的代码配合的。
+
+注意：这还在开发中。
+
+## 带引用字段的结构体
+
+Structs with references require explicitly setting the initial value to a reference value unless the struct already defines its own initial value.
+
+Zero-value references, or nil pointers, will **NOT** be supported in the future, for now data structures such as Linked Lists or Binary Trees that rely on reference fields that can use the value `0`, understanding that it is unsafe, and that it can cause a panic.
+
+```v
+struct Node {
+	a &Node
+	b &Node = 0 // Auto-initialized to nil, use with caution!
+}
+
+// Reference fields must be initialized unless an initial value is declared.
+// Zero (0) is OK but use with caution, it's a nil pointer.
+foo := Node{
+	a: 0
+}
+bar := Node{
+	a: &foo
+}
+baz := Node{
+	a: 0
+	b: 0
+}
+qux := Node{
+	a: &foo
+	b: &bar
+}
+println(baz)
+println(qux)
+```
+
+## sizeof and \_\_offsetof
+
+- `sizeof(Type)` gives the size of a type in bytes.
+- `__offsetof(Struct, field_name)` gives the offset in bytes of a struct field.
+
+```v
+struct Foo {
+	a int
+	b int
+}v
+
+assert sizeof(Foo) == 8
+assert __offsetof(Foo, a) == 0
+assert __offsetof(Foo, b) == 4
+```
+
+## 从 V 中调用 C
+
+```v
+#flag -lsqlite3
+#include "sqlite3.h"
+// See also the example from https://www.sqlite.org/quickstart.html
+struct C.sqlite3 {
+}
+
+struct C.sqlite3_stmt {
+}
+
+type FnSqlite3Callback = fn (voidptr, int, &&char, &&char) int
+
+fn C.sqlite3_open(&char, &&C.sqlite3) int
+
+fn C.sqlite3_close(&C.sqlite3) int
+
+fn C.sqlite3_column_int(stmt &C.sqlite3_stmt, n int) int
+
+// ... you can also just define the type of parameter and leave out the C. prefix
+fn C.sqlite3_prepare_v2(&C.sqlite3, &char, int, &&C.sqlite3_stmt, &&char) int
+
+fn C.sqlite3_step(&C.sqlite3_stmt)
+
+fn C.sqlite3_finalize(&C.sqlite3_stmt)
+
+fn C.sqlite3_exec(db &C.sqlite3, sql &char, cb FnSqlite3Callback, cb_arg voidptr, emsg &&char) int
+
+fn C.sqlite3_free(voidptr)
+
+fn my_callback(arg voidptr, howmany int, cvalues &&char, cnames &&char) int {
+	unsafe {
+		for i in 0 .. howmany {
+			print('| ${cstring_to_vstring(cnames[i])}: ${cstring_to_vstring(cvalues[i]):20} ')
+		}
+	}
+	println('|')
+	return 0
+}
+
+fn main() {
+	db := &C.sqlite3(0) // this means `sqlite3* db = 0`
+	// passing a string literal to a C function call results in a C string, not a V string
+	C.sqlite3_open(c'users.db', &db)
+	// C.sqlite3_open(db_path.str, &db)
+	query := 'select count(*) from users'
+	stmt := &C.sqlite3_stmt(0)
+	// NB: you can also use the `.str` field of a V string,
+	// to get its C style zero terminated representation
+	C.sqlite3_prepare_v2(db, &char(query.str), -1, &stmt, 0)
+	C.sqlite3_step(stmt)
+	nr_users := C.sqlite3_column_int(stmt, 0)
+	C.sqlite3_finalize(stmt)
+	println('There are $nr_users users in the database.')
+	//
+	error_msg := &char(0)
+	query_all_users := 'select * from users'
+	rc := C.sqlite3_exec(db, &char(query_all_users.str), my_callback, voidptr(7), &error_msg)
+	if rc != C.SQLITE_OK {
+		eprintln(unsafe { cstring_to_vstring(error_msg) })
+		C.sqlite3_free(error_msg)
+	}
+	C.sqlite3_clos
+```
+
+## 从 C 中调用 V
+
+Since V can compile to C, calling V code from C is very easy.
+
+By default all V functions have the following naming scheme in C: `[module name]__[fn_name]`.
+
+For example, `fn foo() {}` in module `bar` will result in `bar__foo()`.
+
+To use a custom export name, use the `[export]` attribute:
+
+```v
+[export: 'my_custom_c_name']
+fn foo() {
+}
+```
+
+## 原子操作
+
+V has no special support for atomics, yet, nevertheless it's possible to treat variables as atomics by calling C functions from V. The standard C11 atomic functions like `atomic_store()` are usually defined with the help of macros and C compiler magic to provide a kind of _overloaded C functions_. Since V does not support overloading functions by intention there are wrapper functions defined in C headers named `atomic.h` that are part of the V compiler infrastructure.
+
+There are dedicated wrappers for all unsigned integer types and for pointers. (`byte` is not fully supported on Windows) – the function names include the type name as suffix. e.g. `C.atomic_load_ptr()` or `C.atomic_fetch_add_u64()`.
+
+To use these functions the C header for the used OS has to be included and the functions that are intended to be used have to be declared. Example:
+
+```v
+$if windows {
+	#include "@VEXEROOT/thirdparty/stdatomic/win/atomic.h"
+} $else {
+	#include "@VEXEROOT/thirdparty/stdatomic/nix/atomic.h"
+}
+
+// declare functions we want to use - V does not parse the C header
+fn C.atomic_store_u32(&u32, u32)
+fn C.atomic_load_u32(&u32) u32
+fn C.atomic_compare_exchange_weak_u32(&u32, &u32, u32) bool
+fn C.atomic_compare_exchange_strong_u32(&u32, &u32, u32) bool
+
+const num_iterations = 10000000
+
+// see section "Global Variables" below
+__global (
+	atom u32 // ordinary variable but used as atomic
+)
+
+fn change() int {
+	mut races_won_by_change := 0
+	for {
+		mut cmp := u32(17) // addressable value to compare with and to store the found value
+		// atomic version of `if atom == 17 { atom = 23 races_won_by_change++ } else { cmp = atom }`
+		if C.atomic_compare_exchange_strong_u32(&atom, &cmp, 23) {
+			races_won_by_change++
+		} else {
+			if cmp == 31 {
+				break
+			}
+			cmp = 17 // re-assign because overwritten with value of atom
+		}
+	}
+	return races_won_by_change
+}
+
+fn main() {
+	C.atomic_store_u32(&atom, 17)
+	t := go change()
+	mut races_won_by_main := 0
+	mut cmp17 := u32(17)
+	mut cmp23 := u32(23)
+	for i in 0 .. num_iterations {
+		// atomic version of `if atom == 17 { atom = 23 races_won_by_main++ }`
+		if C.atomic_compare_exchange_strong_u32(&atom, &cmp17, 23) {
+			races_won_by_main++
+		} else {
+			cmp17 = 17
+		}
+		desir := if i == num_iterations - 1 { u32(31) } else { u32(17) }
+		// atomic version of `for atom != 23 {} atom = desir`
+		for !C.atomic_compare_exchange_weak_u32(&atom, &cmp23, desir) {
+			cmp23 = 23
+		}
+	}
+	races_won_by_change := t.wait()
+	atom_new := C.atomic_load_u32(&atom)
+	println('atom: $atom_new, #exchanges: ${races_won_by_main + races_won_by_change}')
+	// prints `atom: 31, #exchanges: 10000000`)
+	println('races won by\n- `main()`: $races_won_by_main\n- `change()`: $races_won_by_change')
+}
+```
+
+In this example both `main()` and the spawned thread `change()` try to replace a value of `17` in the global `atom` with a value of `23`. The replacement in the opposite direction is done exactly 10000000 times. The last replacement will be with `31` which makes the spawned thread finish.
+
+It is not predictable how many replacements occur in which thread, but the sum will always be 10000000. (With the non-atomic commands from the comments the value will be higher or the program will hang – dependent on the compiler optimization used.)
+
+## 全局变量
+
+## 调试
+
+## 条件编译
+
+## 代码热加载
+
+```v
+module main
+
+import time
+
+[live]
+fn print_message() {
+	println('Hello! Modify this message while the program is running.')
+}
+
+fn main() {
+	for {
+		print_message()
+		time.sleep(500 * time.millisecond)
+	}
+}
+```
+
+使用 `v -live message.v` 编译，需要热加载的代码在定义前使用 [live] 属性。目前不支持类型的热加载。
+
+更多例子，可以参见：[github.com/vlang/v/tree/master/examples/hot_code_reload](https://github.com/vlang/v/tree/master/examples/hot_reload)。
+
+## 跨平台编译
+
+跨平台编译只需：
+
+```
+v -os windows .
+```
+
+或
+
+```
+v -os linux .
+```
+
+现在不支持跨平台编译 macOS。
+
+如果没有 C 依赖，需要安装 Clang，LLD linker，和下载 Windows 和 Linux 的库和头文件的压缩包，V 会提供链接。
+
+## 跨平台的 V shell 脚本
+
+V 可以用作 shell 脚本来写部署和编译脚本等。简单易写，并且跨平台，在类 Unix 平台上和 Windows 一样运行 V 脚本。
+
+V 脚本后缀 `.vsh`，os 模块中所有函数都是公共的（例如使用 `mkdir()` 而不是 `os.mkdir()`）。
+
+一个 `deploy.vsh` 的例子：
+
+```v
+#!/usr/bin/env -S v run
+// The shebang above associates the file to V on Unix-like systems,
+// so it can be run just by specifying the path to the file
+// once it's made executable using `chmod +x`.
+
+// Remove if build/ exits, ignore any errors if it doesn't
+rmdir_all('build') or { }
+
+// Create build/, never fails as build/ does not exist
+mkdir('build') ?
+
+// Move *.v files to build/
+result := exec('mv *.v build/') ?
+if result.exit_code != 0 {
+	println(result.output)
+}
+// Similar to:
+// files := ls('.') ?
+// mut count := 0
+// if files.len > 0 {
+//     for file in files {
+//         if file.ends_with('.v') {
+//              mv(file, 'build/') or {
+//                  println('err: $err')
+//                  return
+//              }
+//         }
+//         count++
+//     }
+// }
+// if count == 0 {
+//     println('No files')
+// }
+```
+
+可以像普通 v 程序一样编译生成二进制文件再运行 `v deploy.vsh && ./deploy`，或者使用 v 命令直接运行 `v run deploy.vsh`。在类 Unix 系统中，当添加了可执行权限 `chmod +x`: `./deploy.vsh`，文件可以直接运行。
+
 ## 属性
 
 V 使用属性来修改函数和结构体的行为，属性使用 [ ] 定义在函数、结构体、枚举前，只有如下属性声明：
