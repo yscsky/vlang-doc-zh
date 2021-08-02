@@ -3538,13 +3538,47 @@ fn copy_all(dupes bool) {
 
 一个模块的介绍必须放在第一个行，紧接着模块名。
 
-生成文档使用 vdoc，例如：`v doc net.http`.
+生成文档使用 vdoc，例如：`v doc net.http`。
 
 # 工具
 
-## 代码格式化
+## 代码格式化 v fmt
+
+无需担心如何格式化代码或设置代码样式手则，使用 v fmt 即可：
+
+```sh
+v fmt file.v
+```
+
+推荐设置到编辑器中，每次保存时执行 v fmt -w。一次格式化消耗短（< 30ms）。建议在推送代码前都运行一下。
 
 ## 性能
+
+V 能很好的支持对程序的性能测试：v -profile profile.txt run file.v，会生成一个 profile.txt 文件便于分析。
+
+生成的 profile.txt 文件有 4 列：
+
+a) 函数调用频次
+
+b) 函数调用总共耗时（ms）
+
+c) 函数调用平均耗时（ns）
+
+d) 函数名
+
+对第 3 列（每个函数平均调用时间）排序：sort -n -k3 profile.txt|tail
+
+也可以使用 stopwatches 测试部分代码：
+
+```v
+import time
+
+fn main() {
+	sw := time.new_stopwatch()
+	println('Hello world')
+	println('Greeting the world took: ${sw.elapsed().nanoseconds()}ns')
+}
+```
 
 # 进阶
 
