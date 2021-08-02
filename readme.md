@@ -3245,8 +3245,8 @@ fn test() []int {
 
 如其它编程语言类似，有两个地方用来存放数据：
 
-- 栈，能够以几乎零开销的方式快速进行分配。栈的增减随着函数的调用深度变化，每个函数都有自己的栈调用空间，直到函数返回前都是有效的。没有释放的对象也是必要的，然而这个对象当函数返回是时就无效了。此外，栈空间是有限的，通常每个线程只有几M。
-- 堆，由操作系统管理的大内存区域（通常几G）。堆对象的分配和释放委派给操作系统的特殊函数调用来实现。这就意味着这些对象在多个函数调用中仍然有效，但是相应的管理成本就比较高。
+- 栈，能够以几乎零开销的方式快速进行分配。栈的增减随着函数的调用深度变化，每个函数都有自己的栈调用空间，直到函数返回前都是有效的。没有释放的对象也是必要的，然而这个对象当函数返回是时就无效了。此外，栈空间是有限的，通常每个线程只有几 M。
+- 堆，由操作系统管理的大内存区域（通常几 G）。堆对象的分配和释放委派给操作系统的特殊函数调用来实现。这就意味着这些对象在多个函数调用中仍然有效，但是相应的管理成本就比较高。
 
 ### V 默认的方式
 
@@ -3455,7 +3455,7 @@ V 自身支持 ORM（对象关系映射），支持 SQLite，MySQL 和 Postgres�
 
 V 的 ORM 有如下优势：
 
-- 对所有SQL都采用统一的语法，迁移数据库时更加方便。
+- 对所有 SQL 都采用统一的语法，迁移数据库时更加方便。
 - 查询语句使用 V 语法构造，无需学习新的语法。
 - 安全，所有查询语句自动检查，防止 SQL 注入。
 - 编译时检查，避免在运行时才发现拼写错误。
@@ -3512,11 +3512,9 @@ sql db {
 
 # 文档编写
 
-文档编写
+文档编写方式和 Go 类似，十分简单。无需在代码之外单独写文档，vdoc 会从代码中的文档字符串生成文档。
 
-The way it works is very similar to Go. It's very simple: there's no need to write documentation separately for your code, vdoc will generate it from docstrings in the source code.
-
-Documentation for each function/type/const must be placed right before the declaration:
+每个函数、类型、常量的文档放置在声明之前：
 
 ```v
 // clearall clears all bits in the array
@@ -3524,9 +3522,9 @@ fn clearall() {
 }
 ```
 
-The comment must start with the name of the definition.
+内容必须已定义的名字开始。
 
-Sometimes one line isn't enough to explain what a function does, in that case comments should span to the documented function using single line comments:
+有时一行文字不够表达，可以分成多行表示：
 
 ```v
 // copy_all recursively copies all elements of the array by their value,
@@ -3536,15 +3534,11 @@ fn copy_all(dupes bool) {
 }
 ```
 
-By convention it is preferred that comments are written in *present tense*.
+为了便于理解，文档使用现在时语态。
 
-An overview of the module must be placed in the first comment right after the module's name.
+一个模块的介绍必须放在第一个行，紧接着模块名。
 
-To generate documentation use vdoc, for example `v doc net.http`.
-
-
-
-
+生成文档使用 vdoc，例如：`v doc net.http`.
 
 # 工具
 
